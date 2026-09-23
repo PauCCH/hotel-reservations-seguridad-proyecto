@@ -14,6 +14,53 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_logs: {
+        Row: {
+          id: string
+          actor_id: string | null
+          actor_email: string | null
+          action: string
+          entity: string | null
+          entity_id: string | null
+          metadata: Json
+          ip_address: string | null
+          user_agent: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          actor_id?: string | null
+          actor_email?: string | null
+          action: string
+          entity?: string | null
+          entity_id?: string | null
+          metadata?: Json
+          ip_address?: string | null
+          user_agent?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          actor_id?: string | null
+          actor_email?: string | null
+          action?: string
+          entity?: string | null
+          entity_id?: string | null
+          metadata?: Json
+          ip_address?: string | null
+          user_agent?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       cms_content: {
         Row: {
           id: string
@@ -386,6 +433,7 @@ export type Database = {
         | "rooms:manage"
         | "invoices:view"
         | "clients:view"
+        | "audit:view"
       user_role: "owner" | "admin" | "client"
     }
     CompositeTypes: {
@@ -529,6 +577,7 @@ export const Constants = {
         "rooms:manage",
         "invoices:view",
         "clients:view",
+        "audit:view",
       ],
       user_role: ["owner", "admin", "client"],
     },
