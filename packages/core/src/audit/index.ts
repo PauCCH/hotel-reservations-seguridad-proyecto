@@ -17,6 +17,8 @@
 
 export type { AuditAction, AuditEntity } from "./config/constants";
 export { AUDIT_ACTIONS, AUDIT_ENTITIES } from "./config/constants";
+export type { AuditRequestContext } from "./server/getAuditRequestContext";
+export { getAuditRequestContext } from "./server/getAuditRequestContext";
 export { logAuditEvent } from "./server/logAuditEvent";
 export type { AuditEvent, AuditMetadata } from "./shared/types";
 export {
