@@ -87,6 +87,7 @@ export const ADMINS_TEXTS: Record<SupportedLocale, AdminsTexts> = {
         ROOMS: "Habitaciones",
         CLIENTS: "Clientes",
         INVOICES: "Facturas",
+        AUDIT: "Auditoría",
       },
       PERMISSION_LABELS: {
         [PERMISSIONS.DASHBOARD.VIEW]: "Ver Dashboard",
@@ -102,6 +103,7 @@ export const ADMINS_TEXTS: Record<SupportedLocale, AdminsTexts> = {
         [PERMISSIONS.ROOMS.MANAGE]: "Gestionar Habitaciones",
         [PERMISSIONS.INVOICES.VIEW]: "Ver Facturas",
         [PERMISSIONS.CLIENTS.VIEW]: "Ver Clientes",
+        [PERMISSIONS.AUDIT.VIEW]: "Ver Registro de Auditoría",
       },
       ERRORS: {
         SELF_MODIFY: "No puedes modificar tus propios permisos",
@@ -196,6 +198,7 @@ export const ADMINS_TEXTS: Record<SupportedLocale, AdminsTexts> = {
         ROOMS: "Rooms",
         CLIENTS: "Clients",
         INVOICES: "Invoices",
+        AUDIT: "Audit Log",
       },
       PERMISSION_LABELS: {
         [PERMISSIONS.DASHBOARD.VIEW]: "View Dashboard",
@@ -211,6 +214,7 @@ export const ADMINS_TEXTS: Record<SupportedLocale, AdminsTexts> = {
         [PERMISSIONS.ROOMS.MANAGE]: "Manage Rooms",
         [PERMISSIONS.INVOICES.VIEW]: "View Invoices",
         [PERMISSIONS.CLIENTS.VIEW]: "View Clients",
+        [PERMISSIONS.AUDIT.VIEW]: "View Audit Log",
       },
       ERRORS: {
         SELF_MODIFY: "You cannot modify your own permissions",

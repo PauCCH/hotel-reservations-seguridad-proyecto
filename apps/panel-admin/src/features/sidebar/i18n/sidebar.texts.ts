@@ -29,6 +29,7 @@ export const SIDEBAR_TEXTS: Record<SupportedLocale, SidebarTexts> = {
         INVOICES: "Facturas",
         CMS_LANDING: "Contenido Landing Page (CMS)",
         INVITATIONS: "Invitaciones",
+        AUDIT_LOG: "Registro de Auditoría",
       },
     },
     FOOTER: {
@@ -63,6 +64,7 @@ export const SIDEBAR_TEXTS: Record<SupportedLocale, SidebarTexts> = {
         INVOICES: "Invoices",
         CMS_LANDING: "Landing page content (CMS)",
         INVITATIONS: "Invitations",
+        AUDIT_LOG: "Audit Log",
       },
     },
     FOOTER: {
