@@ -1,6 +1,11 @@
 "use server";
 
-import { AUDIT_ACTIONS, AUDIT_ENTITIES, logAuditEvent } from "@hotel/core/audit";
+import {
+  AUDIT_ACTIONS,
+  AUDIT_ENTITIES,
+  getAuditRequestContext,
+  logAuditEvent,
+} from "@hotel/core/audit";
 import { verifyAdminRole } from "@hotel/core/auth";
 import { createSupabaseServerClient, createSupabaseServiceClient, DB_TABLES } from "@hotel/db";
 import type { AuditLogEntry } from "@hotel/db/types";
@@ -58,12 +63,16 @@ export const getAuditLogs = async (
 
   if (error) throw new Error(error.message);
 
+  const { ipAddress, userAgent } = await getAuditRequestContext();
+
   await logAuditEvent({
     actorId: session.user.id,
     actorEmail: session.user.email,
     action: AUDIT_ACTIONS.AUDIT_LOG_VIEWED,
     entity: AUDIT_ENTITIES.AUDIT_LOGS,
     metadata: { page, pageSize, search: params.search ?? null, action: params.action ?? null },
+    ipAddress,
+    userAgent,
   });
 
   return { rows: (data ?? []) as AuditLogEntry[], total: count ?? 0, page, pageSize };
