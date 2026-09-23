@@ -30,6 +30,9 @@ export const PERMISSIONS = {
   PERMISSIONS: {
     MANAGE: DB_ENUMS.user_permission.permissions_manage,
   },
+  AUDIT: {
+    VIEW: DB_ENUMS.user_permission.audit_view,
+  },
 };
 
 export const PERMISSION_CATEGORY_KEYS: {
@@ -43,4 +46,5 @@ export const PERMISSION_CATEGORY_KEYS: {
   ROOMS: "ROOMS",
   CLIENTS: "CLIENTS",
   INVOICES: "INVOICES",
+  AUDIT: "AUDIT",
 };

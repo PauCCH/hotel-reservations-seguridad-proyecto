@@ -2,6 +2,18 @@ import type { Database } from "../database.types";
 import type { DBTablesWithColumns } from "./columns.types";
 
 export const DB_COLUMNS: DBTablesWithColumns = {
+  audit_logs: {
+    id: "id",
+    actor_id: "actor_id",
+    actor_email: "actor_email",
+    action: "action",
+    entity: "entity",
+    entity_id: "entity_id",
+    metadata: "metadata",
+    ip_address: "ip_address",
+    user_agent: "user_agent",
+    created_at: "created_at",
+  },
   amenities: {
     created_at: "created_at",
     description: "description",
@@ -108,6 +120,7 @@ type _AssertAllColumnsCovered = {
 
 const _assertAllColumnsCovered: _AssertAllColumnsCovered = {
   amenities: true,
+  audit_logs: true,
   cms_content: true,
   pending_invitations: true,
   profiles: true,

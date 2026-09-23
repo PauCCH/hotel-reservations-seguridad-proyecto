@@ -43,6 +43,19 @@ export type SignUpPayload = {
 
 export type AdminsList = Database["public"]["Functions"]["get_admins"]["Returns"];
 
+export interface AuditLogEntry {
+  id: string;
+  actor_id: string | null;
+  actor_email: string | null;
+  action: string;
+  entity: string | null;
+  entity_id: string | null;
+  metadata: Record<string, unknown>;
+  ip_address: string | null;
+  user_agent: string | null;
+  created_at: string;
+}
+
 export interface PendingInvitation {
   id: string;
   email: string;

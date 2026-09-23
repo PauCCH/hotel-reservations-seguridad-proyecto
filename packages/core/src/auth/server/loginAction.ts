@@ -23,6 +23,7 @@ import { createSupabaseServerClient } from "@hotel/db";
 import type { Session } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { AUDIT_ACTIONS, getAuditRequestContext, logAuditEvent } from "../../audit";
 import { verifyAdminRole } from "../index";
 import type { AdminProfile, ClientProfile, LoginResult } from "../shared/types";
 
@@ -78,7 +79,9 @@ export async function loginAction(
 ): Promise<LoginResult> {
   const { requireAdmin = false, redirectTo, cookieStore = await cookies() } = options;
 
+  console.log(`Attempting login for email: ${email}, requireAdmin: ${requireAdmin}`);
   const supabase = createSupabaseServerClient(cookieStore);
+  const { ipAddress, userAgent } = await getAuditRequestContext();
 
   // Sign in with password
   const { data, error } = await supabase.auth.signInWithPassword({
@@ -87,6 +90,14 @@ export async function loginAction(
   });
 
   if (error || !data.user) {
+    await logAuditEvent({
+      actorEmail: email,
+      action: AUDIT_ACTIONS.AUTH_LOGIN_FAILED,
+      metadata: { email, reason: error?.message ?? "Invalid credentials" },
+      ipAddress,
+      userAgent,
+    });
+
     return {
       session: null,
       user: null,
@@ -101,6 +112,18 @@ export async function loginAction(
 
   const session = data.session as Session;
   const user = data.user;
+
+  console.log(`User ${user.id} logged in successfully`);
+  await logAuditEvent({
+    actorId: user.id,
+    actorEmail: user.email ?? email,
+    action: AUDIT_ACTIONS.AUTH_LOGIN_SUCCESS,
+    metadata: { requireAdmin },
+    ipAddress,
+    userAgent,
+  });
+  console.log(`Session created for user ${user.id}: ${session?.access_token}`);
+  console.log(`User ${user.id} is now logged in`);
 
   // Verify admin role if required
   if (requireAdmin) {

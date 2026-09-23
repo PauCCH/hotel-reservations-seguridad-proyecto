@@ -30,6 +30,7 @@ export const DB_ENUMS: {
     rooms_manage: "rooms:manage",
     invoices_view: "invoices:view",
     clients_view: "clients:view",
+    audit_view: "audit:view",
   },
 
   user_role: {

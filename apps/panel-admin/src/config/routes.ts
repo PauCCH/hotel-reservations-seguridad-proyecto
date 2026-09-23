@@ -4,6 +4,7 @@ export const ROUTES = Object.freeze({
     RESERVATIONS: "/admin/reservations",
     NEW: "/admin/reservations/new",
     ADMINS: "/admin/admins",
+    AUDIT_LOG: "/admin/audit-log",
     ACTIVATE: "/admin/activate",
     CMS: "/admin/cms",
     INVITATIONS: "/admin/invitations",

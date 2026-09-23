@@ -8,4 +8,5 @@ export const LABEL_KEYS = Object.freeze({
   ROOMS: "ROOMS",
   INVOICES: "INVOICES",
   CMS_LANDING: "CMS_LANDING",
+  AUDIT_LOG: "AUDIT_LOG",
 });

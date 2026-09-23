@@ -3,6 +3,7 @@ import type { DBTableName } from "../tables/tables.types";
 
 const _DB_TABLES = {
   AMENITIES: "amenities",
+  AUDIT_LOGS: "audit_logs",
   CMS_CONTENT: "cms_content",
   PENDING_INVITATIONS: "pending_invitations",
   PROFILES: "profiles",
@@ -25,6 +26,7 @@ type _AssertAllTablesCovered = {
 
 const _assertAllTablesCovered: _AssertAllTablesCovered = {
   amenities: true,
+  audit_logs: true,
   cms_content: true,
   pending_invitations: true,
   profiles: true,

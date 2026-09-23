@@ -14,89 +14,154 @@ export type Database = {
   }
   public: {
     Tables: {
-      cms_content: {
-        Row: {
-          id: string
-          locale: string
-          section: string
-          content: Json
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          locale: string
-          section: string
-          content?: Json
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          locale?: string
-          section?: string
-          content?: Json
-          updated_at?: string
-        }
-        Relationships: []
-      }
       amenities: {
         Row: {
-          created_at: string
+          created_at: string | null
           description: string | null
           icon: string | null
           id: string
           name: string
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
-          created_at?: string
+          created_at?: string | null
           description?: string | null
           icon?: string | null
           id?: string
           name: string
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
-          created_at?: string
+          created_at?: string | null
           description?: string | null
           icon?: string | null
           id?: string
           name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      audit_logs: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_id: string | null
+          created_at: string
+          entity: string | null
+          entity_id: string | null
+          id: string
+          ip_address: string | null
+          metadata: Json
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_id?: string | null
+          created_at?: string
+          entity?: string | null
+          entity_id?: string | null
+          id?: string
+          ip_address?: string | null
+          metadata?: Json
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_id?: string | null
+          created_at?: string
+          entity?: string | null
+          entity_id?: string | null
+          id?: string
+          ip_address?: string | null
+          metadata?: Json
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
+      cms_content: {
+        Row: {
+          content: Json
+          id: string
+          locale: string
+          section: string
+          updated_at: string
+        }
+        Insert: {
+          content?: Json
+          id?: string
+          locale: string
+          section: string
+          updated_at?: string
+        }
+        Update: {
+          content?: Json
+          id?: string
+          locale?: string
+          section?: string
           updated_at?: string
         }
         Relationships: []
       }
-      room_amenities: {
+      gallery_content: {
         Row: {
-          amenity_id: string
-          created_at: string
-          room_id: string
+          description: string
+          gallery_item_id: string
+          id: string
+          locale: string
+          title: string
+          updated_at: string
         }
         Insert: {
-          amenity_id: string
-          created_at?: string
-          room_id: string
+          description?: string
+          gallery_item_id: string
+          id?: string
+          locale: string
+          title?: string
+          updated_at?: string
         }
         Update: {
-          amenity_id?: string
-          created_at?: string
-          room_id?: string
+          description?: string
+          gallery_item_id?: string
+          id?: string
+          locale?: string
+          title?: string
+          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "room_amenities_amenity_id_fkey"
-            columns: ["amenity_id"]
+            foreignKeyName: "gallery_content_gallery_item_id_fkey"
+            columns: ["gallery_item_id"]
             isOneToOne: false
-            referencedRelation: "amenities"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "room_amenities_room_id_fkey"
-            columns: ["room_id"]
-            isOneToOne: false
-            referencedRelation: "rooms"
+            referencedRelation: "gallery_items"
             referencedColumns: ["id"]
           },
         ]
+      }
+      gallery_items: {
+        Row: {
+          created_at: string
+          id: string
+          image_url: string
+          is_active: boolean
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          image_url: string
+          is_active?: boolean
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          image_url?: string
+          is_active?: boolean
+          updated_at?: string
+        }
+        Relationships: []
       }
       pending_invitations: {
         Row: {
@@ -121,7 +186,7 @@ export type Database = {
           revoked_at?: string | null
           revoked_by?: string | null
           status?: Database["public"]["Enums"]["invitation_status"]
-          user_id?: string
+          user_id: string
         }
         Update: {
           accepted_at?: string | null
@@ -136,87 +201,6 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
-      }
-      reservations: {
-        Row: {
-          id: string
-          code: string
-          user_id: string | null
-          guest_name: string
-          guest_email: string
-          guest_phone: string
-          room_id: string
-          check_in: string
-          check_out: string
-          adults: number
-          children: number
-          pets: number
-          price_per_night: number
-          total_amount: number
-          currency: string
-          status: string
-          cancellation_reason: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          code?: string
-          user_id?: string | null
-          guest_name: string
-          guest_email: string
-          guest_phone: string
-          room_id: string
-          check_in: string
-          check_out: string
-          adults?: number
-          children?: number
-          pets?: number
-          price_per_night: number
-          total_amount: number
-          currency?: string
-          status?: string
-          cancellation_reason?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          code?: string
-          user_id?: string | null
-          guest_name?: string
-          guest_email?: string
-          guest_phone?: string
-          room_id?: string
-          check_in?: string
-          check_out?: string
-          adults?: number
-          children?: number
-          pets?: number
-          price_per_night?: number
-          total_amount?: number
-          currency?: string
-          status?: string
-          cancellation_reason?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "reservations_room_id_fkey"
-            columns: ["room_id"]
-            isOneToOne: false
-            referencedRelation: "rooms"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reservations_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          }
-        ]
       }
       profiles: {
         Row: {
@@ -235,6 +219,190 @@ export type Database = {
           is_active?: boolean
         }
         Relationships: []
+      }
+      reservations: {
+        Row: {
+          adults: number
+          cancellation_reason: string | null
+          check_in: string
+          check_out: string
+          children: number
+          code: string
+          created_at: string
+          currency: string
+          guest_email: string
+          guest_name: string
+          guest_phone: string
+          id: string
+          pets: number
+          price_per_night: number
+          room_id: string
+          status: string
+          total_amount: number
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          adults?: number
+          cancellation_reason?: string | null
+          check_in: string
+          check_out: string
+          children?: number
+          code?: string
+          created_at?: string
+          currency?: string
+          guest_email: string
+          guest_name: string
+          guest_phone: string
+          id?: string
+          pets?: number
+          price_per_night: number
+          room_id: string
+          status?: string
+          total_amount: number
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          adults?: number
+          cancellation_reason?: string | null
+          check_in?: string
+          check_out?: string
+          children?: number
+          code?: string
+          created_at?: string
+          currency?: string
+          guest_email?: string
+          guest_name?: string
+          guest_phone?: string
+          id?: string
+          pets?: number
+          price_per_night?: number
+          room_id?: string
+          status?: string
+          total_amount?: number
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reservations_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      room_amenities: {
+        Row: {
+          amenity_id: string
+          created_at: string | null
+          room_id: string
+        }
+        Insert: {
+          amenity_id: string
+          created_at?: string | null
+          room_id: string
+        }
+        Update: {
+          amenity_id?: string
+          created_at?: string | null
+          room_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_amenities_amenity_id_fkey"
+            columns: ["amenity_id"]
+            isOneToOne: false
+            referencedRelation: "amenities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_amenities_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      room_images: {
+        Row: {
+          created_at: string | null
+          id: string
+          position: number
+          room_id: string
+          storage_path: string
+          url: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          position?: number
+          room_id: string
+          storage_path: string
+          url: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          position?: number
+          room_id?: string
+          storage_path?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_images_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      room_schedules: {
+        Row: {
+          created_at: string | null
+          id: string
+          room_id: string
+          schedule_type: string
+          time_slot: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          room_id: string
+          schedule_type: string
+          time_slot: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          room_id?: string
+          schedule_type?: string
+          time_slot?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_schedules_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       rooms: {
         Row: {
@@ -304,39 +472,24 @@ export type Database = {
       }
       user_permissions: {
         Row: {
-          user_id: string
-          permission: Database["public"]["Enums"]["user_permission"]
+          created_at: string | null
           granted_by: string | null
-          created_at: string
+          permission: Database["public"]["Enums"]["user_permission"]
+          user_id: string
         }
         Insert: {
-          user_id: string
-          permission: Database["public"]["Enums"]["user_permission"]
+          created_at?: string | null
           granted_by?: string | null
-          created_at?: string
+          permission: Database["public"]["Enums"]["user_permission"]
+          user_id: string
         }
         Update: {
-          user_id?: string
-          permission?: Database["public"]["Enums"]["user_permission"]
+          created_at?: string | null
           granted_by?: string | null
-          created_at?: string
+          permission?: Database["public"]["Enums"]["user_permission"]
+          user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "user_permissions_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_permissions_granted_by_fkey"
-            columns: ["granted_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          }
-        ]
+        Relationships: []
       }
       user_roles: {
         Row: {
@@ -369,6 +522,13 @@ export type Database = {
           role: string
         }[]
       }
+      has_permission: {
+        Args: { p_permission: Database["public"]["Enums"]["user_permission"] }
+        Returns: boolean
+      }
+      is_admin_or_owner: { Args: never; Returns: boolean }
+      set_admin_permissions: { Args: { admin_id: string }; Returns: undefined }
+      set_owner_permissions: { Args: { owner_id: string }; Returns: undefined }
     }
     Enums: {
       invitation_status: "pending" | "accepted" | "revoked" | "expired"
@@ -386,6 +546,7 @@ export type Database = {
         | "rooms:manage"
         | "invoices:view"
         | "clients:view"
+        | "audit:view"
       user_role: "owner" | "admin" | "client"
     }
     CompositeTypes: {
@@ -402,12 +563,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -431,11 +592,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -456,11 +617,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -481,11 +642,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -498,11 +659,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -529,6 +690,7 @@ export const Constants = {
         "rooms:manage",
         "invoices:view",
         "clients:view",
+        "audit:view",
       ],
       user_role: ["owner", "admin", "client"],
     },

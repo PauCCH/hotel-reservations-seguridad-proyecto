@@ -1,0 +1,5 @@
+export const AUDIT_LOG_PAGE_SIZE = 25;
+
+export const AUDIT_LOG_PAGINATION_MAX_VISIBLE_PAGES = 7 as const;
+export const AUDIT_LOG_PAGINATION_ELLIPSIS_THRESHOLD = 3 as const;
+export const AUDIT_LOG_PAGINATION_NEIGHBOR_WINDOW = 1 as const;

@@ -52,4 +52,8 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
     labelKey: PERMISSION_CATEGORY_KEYS.INVOICES,
     permissions: [PERMISSIONS.INVOICES.VIEW],
   },
+  {
+    labelKey: PERMISSION_CATEGORY_KEYS.AUDIT,
+    permissions: [PERMISSIONS.AUDIT.VIEW],
+  },
 ];
