@@ -71,7 +71,7 @@ _Última actualización: 2026-09-28_
 |---|---|---|---|---|---|
 | Paula | Autenticación | 1 — Diagnóstico | P1.1 Inventario de activos del módulo | — | — |
 | Joseph | Gestión de Usuarios | 1 — Diagnóstico | J1.1 Inventario de activos del módulo | — | — |
-| Aarón | Operaciones / Transacciones | 1 — Diagnóstico | G0.2 Guardar plantillas; luego A1.1 Inventario de activos | — | — |
+| Aarón | Operaciones / Transacciones | 1 — Diagnóstico | A1.1 Inventario de activos del módulo | — | — |
 | Fabian | Logs / Auditoría | 1 — Diagnóstico | F1.1 Inventario de activos del módulo | — | — |
 
 ### Estado global del repo
@@ -80,7 +80,12 @@ _Última actualización: 2026-09-28_
       servicio `logAuditEvent`, captura de IP/user-agent en login, UI en `panel-admin/admin/audit-log`.
 - [x] Decisión de equipo sobre la **línea base vulnerable** (ver §4.1) — 2026-09-28.
 - [x] Responsables de las tareas grupales asignados (ver §6) — 2026-09-28.
-- [ ] Plantillas de la profesora recibidas y guardadas en `docs/proyecto-seguridad/plantillas/`.
+- [x] Plantillas de la profesora guardadas en `docs/proyecto-seguridad/plantillas/` (2026-09-28):
+  - `matriz-general-gobernanza.xlsx` → base de G1 (Fase 1).
+  - `ejemplo-poc-audit-poisoning.docx` → formato de referencia para las PoC y G2 (Fase 2).
+  - `matriz-riesgo-residual.xlsx` → base de G3.1 (Fase 3).
+  - `reporte-tecnico-parches.docx` → base de G3.2 (Fase 3).
+  - `rubrica-evaluacion.xlsx` → rúbrica oficial; revisarla antes de cerrar cada entregable.
 
 ---
 
@@ -133,7 +138,7 @@ Reglas para las vulnerabilidades introducidas:
 ```
 docs/proyecto-seguridad/
   plan-desarrollo.md            ← este archivo
-  plantillas/                   ← plantillas de la profesora / acordadas
+  plantillas/                   ← plantillas de la profesora + rúbrica (no editar; copiar a consolidado/)
   consolidado/                  ← matriz de gobernanza, doc de PoCs, matriz de riesgo, reporte de parches
   auth/  users/  operations/  audit/
     fase-1-diagnostico.md
@@ -308,6 +313,7 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 | Fecha | Tarea | Rama / commit / PR | Resultado |
 |---|---|---|---|
 | 2026-09-28 | Configuración local (`.env`) y plan de desarrollo | `docs/plan-proyecto-seguridad` | PR abierto |
+| 2026-09-28 | G0.2 Plantillas movidas a `plantillas/` | `docs/plan-proyecto-seguridad` | Hecho |
 
 ---
 
@@ -364,7 +370,7 @@ de hash) y cobertura de eventos de los otros módulos.
 | ID | Tarea | Responsable | Depende de | Estado |
 |---|---|---|---|---|
 | G0.1 | Tomar decisión §4.1 | Todos | — | [x] 2026-09-28 |
-| G0.2 | Guardar plantillas de la profesora en `plantillas/` | Aarón | — | [ ] |
+| G0.2 | Guardar plantillas de la profesora en `plantillas/` | Aarón | — | [x] 2026-09-28 |
 | G1 | Matriz General de Gobernanza del Sistema | Aarón | P1.5, J1.5, A1.5, F1.5 | [ ] |
 | G2 | Documento de PoCs estandarizado | Fabian | P2.4, J2.4, A2.4, F2.4 | [ ] |
 | G3.1 | Matriz de Riesgos NIST CSF actualizada (riesgo residual) | Paula | P3.5, J3.5, A3.5, F3.5 | [ ] |
