@@ -4,6 +4,14 @@
 - This file gives AI agents and contributors a consistent operating guide.
 - Keep instructions concise; defer to README and CONTRIBUTING for detail.
 
+## Security course project (read first)
+- This repo is the target of the IC-8071 Seguridad del Software final project (4 modules, 4 members).
+- Progress, next steps and per-member work routes live in `docs/proyecto-seguridad/plan-desarrollo.md`.
+- When a user starts a session by identifying themselves (e.g. "Soy Paula"), read that file and follow
+  its §0 "Protocolo de inicio de sesión" before doing anything else.
+- Members: Paula (Autenticación), Joseph (Gestión de Usuarios), Aarón (Operaciones/Transacciones),
+  Fabian (Logs/Auditoría).
+
 ## Repo summary
 - Monorepo with Turborepo + pnpm workspaces.
 - Apps: `apps/landing`, `apps/portal-reservas`, `apps/panel-admin`.
