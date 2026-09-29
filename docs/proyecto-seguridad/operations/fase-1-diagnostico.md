@@ -6,7 +6,7 @@
 | Responsable | Aarón Líos Cubillo |
 | Rama | `security/operations/fase1-diagnostico` |
 | Commit base analizado | `5af5fb1` (`develop`, 2026-09-28) |
-| Estado | A1.1 completo · A1.2–A1.4 pendientes |
+| Estado | A1.1 y A1.2 completos · A1.3–A1.4 pendientes |
 
 ---
 
@@ -112,7 +112,120 @@ Superficies detectadas durante el inventario. Cada una se confirma o descarta co
 
 ## 4. A1.2 Mapeo de componentes contra NIST CSF 2.0
 
-_Pendiente._
+Estado frente a la subcategoría: **Cumple** · **Parcial** (existe el control pero con huecos) ·
+**No cumple** (control ausente) · **Por verificar** (requiere la PoC de la Fase 2).
+La columna "Ref." remite a las observaciones de §3.
+
+### 4.1 Flujo de datos del módulo (ID.AM-03)
+
+```
+Portal (navegador)                    portal-reservas (servidor)             Terceros
+──────────────────                    ──────────────────────────             ────────
+Búsqueda / filtros ── (todo en cliente, sobre mock data) ──┐
+Selección → /reserve?rooms&checkIn&checkOut&guests ───────►│ ReservePage: resuelve rooms (mock),
+                                                           │ calcula noches y total
+GuestForm (nombre, email, tel., peticiones) ── validación  │
+  solo cliente; solo el email sale del navegador ─────────►│ POST /api/checkout {roomIds, fechas, email}
+                                                           │ → precio recalculado desde mock ──────► Stripe Checkout Session
+Navegador ◄──────────────── redirect a URL de Stripe ◄─────┘                                          (datos de tarjeta)
+Stripe ── redirect ──► /reserve/success?session_id=… (sin verificación ni webhook)
+
+Panel (navegador admin)               panel-admin (servidor)                  Supabase
+───────────────────────               ──────────────────────                  ────────
+/admin/** ── middleware: usuario autenticado y activo ──►  server actions ──► service-role: reservations,
+                                                                              system_settings, room_images, Storage
+                                                           server actions ──► sesión del usuario (RLS): rooms,
+                                                                              amenities, room_amenities
+                                                           scheduleService ─► cliente anónimo (RLS): room_schedules
+```
+
+Hoy no hay ningún flujo que cree filas en `reservations` desde el portal: el checkout termina en Stripe
+y la tabla solo se llena por otros medios (seed o carga manual).
+
+### 4.2 Mapeo por componente
+
+#### Portal — checkout y pago
+
+| Componente | Función | Subcategoría NIST CSF 2.0 | Por qué aplica | Estado | Ref. |
+|---|---|---|---|---|---|
+| OP-S01 `POST /api/checkout` | PROTECT | **PR.DS-10** Datos en uso protegidos (integridad de la entrada) | Recibe `roomIds`, fechas y email sin validar el esquema | No cumple | O9 |
+| | PROTECT | **PR.IR-01** Redes y entornos protegidos de acceso lógico no autorizado | Endpoint público sin rate limit ni verificación de origen (CSRF) | No cumple | O9 |
+| | PROTECT | **PR.PS-06** Prácticas de desarrollo seguro | No hay esquema (p. ej. Zod) en la frontera de la API | No cumple | O9 |
+| OP-S02 `openGatewaySession` | PROTECT | **PR.DS-10** Integridad de los datos en uso | El precio se recalcula en el servidor, no se confía en el cliente | Cumple | — |
+| | PROTECT | **PR.DS-10** | `computeNights` acepta fechas inválidas o invertidas y fuerza 1 noche | Parcial | O9 |
+| | IDENTIFY | **ID.AM-02** Inventario de software y servicios | El precio sale de mock data y no del catálogo real (`rooms`) | Parcial | O10 |
+| OP-S03 / OP-X01 Stripe | PROTECT | **PR.DS-02** Datos en tránsito protegidos | Llamada HTTPS a Stripe y tarjeta capturada en la página alojada de Stripe | Cumple | — |
+| | GOVERN | **GV.SC-05/07** Requisitos y riesgos de proveedores | Stripe es proveedor crítico; no hay requisitos documentados ni monitoreo | Parcial | O8 |
+| | IDENTIFY | **ID.AM-04** Inventario de servicios de proveedores | Stripe no figura en `.env.example`; existe un gateway mock silencioso | Parcial | O8 |
+| OP-S05 `/reserve/success` | DETECT | **DE.CM-06** Actividad de proveedores externos monitoreada | No hay webhook ni consulta a Stripe para confirmar el pago | No cumple | O8 |
+| | PROTECT | **PR.DS-10** Integridad | Muestra éxito y código `HR-…` para cualquier `session_id` | No cumple | O8 |
+| OP-S04 `/reserve` + `GuestForm` | PROTECT | **PR.DS-10** | Parámetros de URL tratados como no confiables y redirige si faltan | Parcial | — |
+| | PROTECT | **PR.DS-01** Datos en reposo protegidos (PII) | La PII no se persiste hoy (reduce la exposición) | Cumple (por omisión) | O10 |
+| OP-S06 búsqueda / filtros | PROTECT | **PR.DS-10** | Lógica solo cliente sobre datos estáticos; no llega a consultas | Cumple | O11 |
+
+#### Panel — reservas y modo de reservas
+
+| Componente | Función | Subcategoría NIST CSF 2.0 | Por qué aplica | Estado | Ref. |
+|---|---|---|---|---|---|
+| OP-S07/S08 `updateReservationStatus` | PROTECT | **PR.AA-05** Permisos con menor privilegio aplicados | `requirePermission(reservations_edit)` antes de escribir | Cumple | — |
+| | PROTECT | **PR.DS-01** Integridad de datos en reposo | No valida la transición de estado ni el valor de `status` (depende del CHECK de BD) | Parcial | O4 |
+| | PROTECT | **PR.PS-06** Desarrollo seguro | `VALID_TRANSITIONS` existe pero no se usa | No cumple | O4 |
+| | PROTECT | **PR.IR-01** / CSRF | Server action de Next.js (protección de origen integrada; por verificar) | Por verificar | — |
+| | DETECT | **DE.CM-03** Actividad de personal monitoreada | El cambio de estado y el motivo de cancelación no se auditan | No cumple | O12 |
+| | PROTECT | **PR.PS-04** Registros de log generados | No se llama a `logAuditEvent` | No cumple | O12 |
+| OP-S08 `getAllReservations` / `getReservationById` | PROTECT | **PR.AA-05** | `requirePermission(reservations_view)` con service-role | Cumple | — |
+| | PROTECT | **PR.DS-01** (confidencialidad de PII) | La PII de huéspedes solo se expone con permiso de vista | Cumple | — |
+| OP-S08 `getRoomNames` | PROTECT | **PR.AA-05** | Service-role sin `requirePermission` | No cumple (impacto bajo) | O6 |
+| OP-S09 `updateBookingMode` | PROTECT | **PR.AA-05** | `requirePermission(reservations_edit)` | Cumple | — |
+| | PROTECT | **PR.PS-01** Gestión de configuración | Escribe cualquier string en `system_settings`; no valida `manual`/`automatic` | No cumple | O5 |
+| | DETECT | **DE.CM-09** Software, entorno y datos monitoreados | Un cambio de configuración de negocio no deja rastro | No cumple | O12 |
+| OP-D01 tabla `reservations` | PROTECT | **PR.AA-05** / **PR.DS-01** | RLS habilitado sin políticas: niega todo salvo service-role | Cumple (estricto) | — |
+| | PROTECT | **PR.DS-01** | CHECK de estado, fechas y montos; snapshot de precio | Cumple | — |
+
+#### Panel — habitaciones, amenidades, horarios y galería
+
+| Componente | Función | Subcategoría NIST CSF 2.0 | Por qué aplica | Estado | Ref. |
+|---|---|---|---|---|---|
+| OP-S12 `galleryActions` | PROTECT | **PR.AA-05** | Service-role sin `requirePermission(rooms_manage)` en upload, delete y reorder | No cumple | O1 |
+| | PROTECT | **PR.DS-01** Integridad de los datos en reposo (bucket) | Tipo y tamaño validados solo en el cliente; extensión y `contentType` del atacante | No cumple | O3 |
+| | PROTECT | **PR.PS-05** Evitar ejecución de software no autorizado | Un HTML/SVG subido al bucket público podría ejecutarse en el navegador | Por verificar | O3 |
+| | DETECT | **DE.CM-03** | Subidas y borrados sin auditoría | No cumple | O12 |
+| OP-S10 `roomActions` | PROTECT | **PR.AA-05** | Solo depende de RLS de `rooms`; no llama a `requirePermission` | Parcial | O7 |
+| | PROTECT | **PR.AA-04** Aserciones de identidad protegidas y verificadas | La política usa `auth.jwt() ->> 'role'`, y el rol se sincroniza a `user_metadata` (editable por el usuario) | Por verificar | O7 |
+| | PROTECT | **PR.DS-10** | `createRoom` inserta el DTO completo (posible asignación masiva) | Por verificar | — |
+| | DETECT | **DE.CM-03** | Cambios de tarifas y activación de habitaciones sin auditoría | No cumple | O12 |
+| OP-S11 `amenityActions` | PROTECT | **PR.AA-05** | RLS por `user_roles` (admin/owner), pero no exige el permiso `rooms_manage` | Parcial | — |
+| | PROTECT | **PR.DS-10** | Nombre, ícono y descripción libres, sin validar longitud ni formato | Parcial | — |
+| OP-S13 `scheduleService` | PROTECT | **PR.AA-05** / **PR.AA-04** | Cliente anónimo + RLS basado en `auth.jwt() ->> 'role'` | Por verificar | O7 |
+| OP-S14 `getRooms` | PROTECT | **PR.AA-05** | `requirePermission(rooms_manage)` | Cumple | — |
+
+#### Transversal (compartido con otros módulos)
+
+| Componente | Función | Subcategoría NIST CSF 2.0 | Por qué aplica | Estado | Ref. | Dueño |
+|---|---|---|---|---|---|---|
+| OP-S15 middleware del panel | PROTECT | **PR.AA-05** | `/admin/**` exige sesión activa pero no rol admin/owner | Parcial | O2 | Paula |
+| OP-S16 `requirePermission` | PROTECT | **PR.AA-03** Usuarios autenticados | Usa `getSession()` (lee la cookie) en lugar de `getUser()` (valida con el servidor) | Por verificar | — | Paula / Joseph |
+| `next.config.ts` (portal y panel) | PROTECT | **PR.PS-01** / **PR.DS-02** | Sin CSP, HSTS, `X-Frame-Options` ni otras cabeceras de seguridad | No cumple | — | Paula |
+| `.env.example` | GOVERN | **GV.PO-01** / **PR.PS-01** | Faltan `STRIPE_SECRET_KEY` y la documentación del modo mock | Parcial | O8 | Aarón |
+| Vulnerabilidades del módulo | IDENTIFY | **ID.RA-01** Vulnerabilidades identificadas y registradas | Este diagnóstico + las PoC de la Fase 2 | En curso | §3 | Aarón |
+
+### 4.3 Resumen de cobertura por subcategoría
+
+| Subcategoría | Componentes evaluados | Cumple | Parcial | No cumple | Por verificar |
+|---|---|---|---|---|---|
+| ID.AM-02/03/04 | 2 (+ flujo en §4.1) | 0 | 2 | 0 | 0 |
+| ID.RA-01 | 1 | — | — | — | En curso |
+| GV.SC-05/07, GV.PO-01 | 2 | 0 | 2 | 0 | 0 |
+| PR.AA-03/04/05 | 13 | 5 | 3 | 2 | 3 |
+| PR.DS-01/02/10 | 15 | 7 | 4 | 3 | 1 |
+| PR.PS-01/04/05/06 | 6 | 0 | 0 | 5 | 1 |
+| PR.IR-01 | 2 | 0 | 0 | 1 | 1 |
+| DE.CM-03/06/09 | 5 | 0 | 0 | 5 | 0 |
+
+**Lectura:** la autorización del módulo es desigual. Reservas está bien protegido; galería y habitaciones
+no, y habitaciones depende de un RLS dudoso. La integridad de los datos de negocio (transiciones de
+estado, configuración, confirmación del pago) no tiene validación en el servidor. **DETECT es nulo**:
+ninguna operación del módulo deja rastro de auditoría.
 
 ## 5. A1.3 Impacto operacional y de negocio (GOVERN / IDENTIFY)
 
