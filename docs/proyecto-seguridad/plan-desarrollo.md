@@ -71,7 +71,7 @@ _Última actualización: 2026-09-28_
 |---|---|---|---|---|---|
 | Paula | Autenticación | 1 — Diagnóstico | P1.1 Inventario de activos del módulo | — | — |
 | Joseph | Gestión de Usuarios | 1 — Diagnóstico | J1.1 Inventario de activos del módulo | — | — |
-| Aarón | Operaciones / Transacciones | 1 — Diagnóstico | A1.4 Línea base de controles PROTECT/DETECT | `security/operations/fase1-diagnostico` | — |
+| Aarón | Operaciones / Transacciones | 1 — Diagnóstico | A1.5 Revisar y entregar `fase-1-diagnostico.md` (PR a `develop`) | `security/operations/fase1-diagnostico` | — |
 | Fabian | Logs / Auditoría | 1 — Diagnóstico | F1.1 Inventario de activos del módulo | — | — |
 
 ### Estado global del repo
@@ -291,7 +291,7 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 - [x] A1.1 Inventario de activos (reservas, habitaciones, precios, datos de huéspedes, pasarela de pago).
 - [x] A1.2 Mapeo de componentes/endpoints contra NIST CSF 2.0.
 - [x] A1.3 Impacto operacional y de negocio (GOVERN/IDENTIFY).
-- [ ] A1.4 Línea base de controles PROTECT/DETECT.
+- [x] A1.4 Línea base de controles PROTECT/DETECT.
 - [ ] A1.5 Entregar `docs/proyecto-seguridad/operations/fase-1-diagnostico.md`.
 
 **Fase 2**
@@ -316,7 +316,8 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 | 2026-09-28 | G0.2 Plantillas movidas a `plantillas/` | `docs/plan-proyecto-seguridad` | Hecho |
 | 2026-09-28 | A1.1 Inventario de activos (datos, componentes, servicios externos, controles existentes) + 12 observaciones candidatas para Fase 2 | `security/operations/fase1-diagnostico` | Hecho; en `operations/fase-1-diagnostico.md` (commit `187fd2a`) |
 | 2026-09-28 | A1.2 Mapeo NIST CSF 2.0: flujo de datos (ID.AM-03), 40+ controles evaluados por componente, resumen de cobertura | `security/operations/fase1-diagnostico` | Hecho; DETECT sin cobertura, PR.AA desigual (commit `c52ab13`) |
-| 2026-09-28 | A1.3 Impacto: contexto GV.OC, apetito de riesgo, BIA por proceso, escala I×P y 11 escenarios de riesgo inherente | `security/operations/fase1-diagnostico` | Hecho; 4 Altos (R01–R04), 6 Medios, 1 Bajo |
+| 2026-09-28 | A1.3 Impacto: contexto GV.OC, apetito de riesgo, BIA por proceso, escala I×P y 11 escenarios de riesgo inherente | `security/operations/fase1-diagnostico` | Hecho; 4 Altos (R01–R04), 6 Medios, 1 Bajo (commit `a7b2c68`) |
+| 2026-09-28 | A1.4 Línea base: 16 controles (13 PROTECT, 3 DETECT) con estado, brecha, tarea A3.x y coordinación; 7 filas listas para G1 | `security/operations/fase1-diagnostico` | Hecho; 2 cumplen, 5 parciales, 9 no cumplen / por verificar |
 
 ---
 

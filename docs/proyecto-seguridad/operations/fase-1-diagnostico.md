@@ -6,7 +6,7 @@
 | Responsable | Aarón Líos Cubillo |
 | Rama | `security/operations/fase1-diagnostico` |
 | Commit base analizado | `5af5fb1` (`develop`, 2026-09-28) |
-| Estado | A1.1–A1.3 completos · A1.4 pendiente |
+| Estado | A1.1–A1.4 completos · listo para revisión (A1.5) |
 
 ---
 
@@ -303,12 +303,62 @@ existen (§2.4) sí se consideran; en la Fase 3 se recalcula como riesgo residua
 
 ## 6. A1.4 Línea base de controles PROTECT / DETECT
 
-_Pendiente. Partir de §2.4 y §3._
+La línea base es el **mínimo de controles** que el módulo debe cumplir para que cada riesgo de §5.5 quede
+en Bajo o Medio. La columna "Estado actual" es el punto de partida de la Fase 3. La columna "Tarea"
+enlaza con el checklist A3.x del plan.
+
+### 6.1 Controles PROTECT
+
+| ID | Control requerido (línea base) | Subcategoría | Riesgos | Estado actual | Brecha | Tarea | Coordinar con |
+|---|---|---|---|---|---|---|---|
+| **OP-C01** | **Autorización en el servidor en cada server action o servicio del módulo**: `requirePermission(rooms_manage)` en `galleryActions`, `roomActions`, `amenityActions` y `scheduleService`; `requirePermission(reservations_view)` en `getRoomNames` | PR.AA-05 | R01, R02, R11 | **Parcial**: solo reservas, modo de reservas y `getRooms` | 4 servicios de habitaciones y 1 de reservas sin guard | A3.1 | Joseph (constantes de permisos) |
+| **OP-C02** | **Middleware del panel restringido por rol**: `/admin/**` solo para `admin`/`owner` activos | PR.AA-05 | R01 | **Parcial**: solo exige sesión activa | Un cliente del portal pasa el middleware | A3.1 | **Paula** (dueña de `middleware.ts`) |
+| **OP-C03** | **RLS de menor privilegio basado en `user_roles` o permisos**, nunca en claims editables del JWT (`user_metadata`); incluir `owner`; `WITH CHECK` explícito en escritura | PR.AA-04, PR.AA-05 | R02 | **Por verificar / no cumple**: `rooms`, `room_images` y `room_schedules` usan `auth.jwt() ->> 'role' = 'admin'` | Política posiblemente falsificable o inoperante; excluye al owner | A3.1 | **Paula** (`sync_role_to_jwt`), Joseph (modelo de roles) |
+| **OP-C04** | **Validación con esquema en cada frontera** (Zod): `/api/checkout` (`roomIds` UUID, fechas ISO, `checkOut > checkIn`, email); `status` y `cancellationReason` (enum y longitud máxima); `BookingMode` (enum); DTO de habitación (lista blanca de campos) | PR.DS-10, PR.PS-06 | R05, R06, R07, R09 | **No cumple**: solo tipos de TypeScript (se borran en runtime) y validación de UI | No hay validación en runtime en el servidor | A3.1 / A3.3 | — |
+| **OP-C05** | **Máquina de estados aplicada en el servidor**: `updateReservationStatus` rechaza transiciones que no estén en `VALID_TRANSITIONS` (opcional: trigger en BD como defensa en profundidad) | PR.DS-01 | R05 | **No cumple**: la matriz existe pero no se usa | Se puede pasar de `cancelled` a `approved` | A3.3 | — |
+| **OP-C06** | **Validación de archivos en el servidor**: tipo real por *magic bytes* (JPEG/PNG/WebP), extensión y `contentType` fijados por el servidor, tamaño ≤ 5 MB, políticas del bucket `room-images` versionadas en una migración | PR.DS-01, PR.PS-05 | R01 | **No cumple**: validación solo en `useGalleryStage.ts`; bucket fuera de migraciones | Un HTML o SVG se puede subir y servir públicamente | A3.2 | — |
+| **OP-C07** | **Escape de salida y límites al texto libre** (amenidades, `cancellation_reason`, datos del huésped) + **CSP** que bloquee scripts inline y orígenes no confiables | PR.DS-10, PR.PS-01 | R01 | **Parcial**: React escapa por defecto; no hay `dangerouslySetInnerHTML`; **sin CSP** | Sin CSP ni límites de longitud o formato | A3.2 | **Paula** (CSP global) |
+| **OP-C08** | **Verificación del pago con la pasarela**: `/reserve/success` consulta la sesión en Stripe (`payment_status = paid`) antes de mostrar la confirmación; webhook firmado (`Stripe-Signature`) como única vía para confirmar o crear reservas; gateway mock deshabilitado fuera de desarrollo | PR.DS-10 | R03 | **No cumple**: se confía en el `session_id` de la URL; el mock redirige directo a éxito | No hay integridad de la confirmación de pago | A3.3 | — |
+| **OP-C09** | **Protección anti-abuso de `/api/checkout`**: verificación de `Origin` (anti-CSRF) y rate limit por IP | PR.IR-01 | R06 | **No cumple** | Endpoint público sin límites | A3.3 | Paula (si se centraliza en el middleware) |
+| **OP-C10** | **Gestión de secretos y menor uso de service-role**: `STRIPE_SECRET_KEY` documentada en `.env.example`; módulos con service-role marcados `server-only`; service-role solo donde RLS no alcance | PR.PS-01, PR.AA-05 | R10 | **Parcial**: las claves solo se usan en el servidor; falta documentación y hay uso amplio de service-role | Service-role en galería sin guard (amplifica R01) | A3.1 | — |
+| **OP-C11** | **Restricciones de integridad en BD** (CHECK de estado, fechas y montos; snapshot de precio) | PR.DS-01 | R05, R09 | **Cumple** | — | Mantener | — |
+| **OP-C12** | **Precio calculado en el servidor** a partir de la fuente de verdad (tabla `rooms`), nunca del cliente | PR.DS-10 | R09 | **Cumple parcialmente**: se recalcula en el servidor, pero desde mock data | Fuente de precios distinta a la BD administrada | A3.3 | — |
+| **OP-C13** | **PII de huéspedes con acceso mínimo**: RLS deny-all + `requirePermission(reservations_view)` en toda lectura | PR.DS-01, PR.AA-05 | R08 | **Cumple** | — | Mantener; test de regresión | — |
+
+### 6.2 Controles DETECT
+
+| ID | Control requerido (línea base) | Subcategoría | Riesgos | Estado actual | Brecha | Tarea | Coordinar con |
+|---|---|---|---|---|---|---|---|
+| **OP-C14** | **Auditoría de operaciones del módulo** vía `logAuditEvent`, con actor, recurso, valor antes/después y campos saneados. Eventos mínimos: `reservation.status_changed`, `booking_mode.updated`, `room.created`, `room.updated` (incluye cambio de tarifa), `room.toggled`, `room_gallery.image_uploaded`, `room_gallery.image_deleted`, `checkout.session_created` | PR.PS-04, DE.CM-03, DE.CM-09 | R04 (y soporta R01, R02, R05, R07) | **No cumple**: ningún evento del módulo se registra | Sin no repudio ni trazabilidad | A3.4 | **Fabian** (nuevos `AUDIT_ACTIONS` y guía de uso) |
+| **OP-C15** | **Registro de intentos denegados y entradas rechazadas** (`PermissionDeniedError`, fallos de esquema en checkout, transiciones inválidas) para detectar sondeos | DE.CM-03, DE.AE-02 | R01, R05, R06 | **No cumple** | Los intentos de abuso son invisibles | A3.4 | Fabian |
+| **OP-C16** | **Monitoreo de la pasarela**: eventos del webhook de Stripe registrados y conciliación pagos ↔ reservas | DE.CM-06 | R03 | **No cumple**: no hay webhook | No se detecta una confirmación sin pago | A3.3 / A3.4 | Fabian |
+
+### 6.3 Resumen de la línea base
+
+| Estado | PROTECT | DETECT | Total |
+|---|---|---|---|
+| Cumple | 2 (C11, C13) | 0 | 2 |
+| Parcial | 5 (C01, C02, C07, C10, C12) | 0 | 5 |
+| No cumple / por verificar | 6 (C03, C04, C05, C06, C08, C09) | 3 (C14, C15, C16) | 9 |
+| **Total** | **13** | **3** | **16** |
+
+**Relación con los riesgos altos:** R01 → C01, C02, C06, C07 · R02 → C03 (+ C01) · R03 → C08, C16 ·
+R04 → C14, C15. Con estos controles implementados, el objetivo de la Fase 3 es dejar **R01–R04 en Bajo**
+y **R06 en Medio** como máximo: el rate limit en memoria no es distribuido, así que es aceptable como
+residual Medio según la escala del enunciado.
+
+---
 
 ## 7. Filas para la Matriz General de Gobernanza (G1)
 
-_Pendiente. Formato de `plantillas/matriz-general-gobernanza.xlsx`:_
+Formato de `plantillas/matriz-general-gobernanza.xlsx`, listo para consolidar:
 
 | Módulo y responsable | Activo crítico | Función NIST CSF | Categoría / subcategoría NIST CSF | Control de seguridad requerido (línea base) | Nivel de riesgo inherente |
 |---|---|---|---|---|---|
-| | | | | | |
+| Módulo 3: Operaciones / Transacciones (Aarón Líos) | Galería de habitaciones (`room_images`, bucket `room-images`), server actions `galleryActions` | PROTECT (PR) | PR.AA-05: Permisos gestionados con menor privilegio; PR.PS-05: Prevención de ejecución no autorizada | `requirePermission(rooms_manage)` en el servidor, middleware del panel restringido por rol y validación de archivos en el servidor (magic bytes, tipo y extensión fijados por el servidor) | Alto |
+| Módulo 3: Operaciones / Transacciones (Aarón Líos) | Catálogo y tarifas (`rooms`, `room_schedules`) y sus políticas RLS | PROTECT (PR) | PR.AA-04: Aserciones de identidad protegidas y verificadas; PR.AA-05: Control de acceso | RLS basado en `user_roles`/permisos (no en claims editables del JWT), incluyendo al owner y con `WITH CHECK` | Alto |
+| Módulo 3: Operaciones / Transacciones (Aarón Líos) | Confirmación de pago (sesión de Stripe, `/reserve/success`, código de confirmación) | PROTECT (PR) / DETECT (DE) | PR.DS-10: Integridad de datos en uso; DE.CM-06: Monitoreo de proveedores externos | Verificar `payment_status` con Stripe antes de confirmar, webhook firmado y gateway mock deshabilitado fuera de desarrollo | Alto |
+| Módulo 3: Operaciones / Transacciones (Aarón Líos) | Operaciones administrativas (estado de reservas, tarifas, modo de reservas, galería) | DETECT (DE) | DE.CM-03: Monitoreo de actividad del personal; PR.PS-04: Generación de registros | Registrar cada operación vía `logAuditEvent` (actor, antes/después, campos saneados) y los intentos denegados | Alto |
+| Módulo 3: Operaciones / Transacciones (Aarón Líos) | Estado de las reservas (`reservations.status`) y modo de reservas (`system_settings`) | PROTECT (PR) | PR.DS-01: Integridad de datos en reposo; PR.PS-01: Gestión de configuración | Máquina de estados aplicada en el servidor y validación con esquema (enum) de `status` y `BookingMode` | Medio |
+| Módulo 3: Operaciones / Transacciones (Aarón Líos) | API pública `POST /api/checkout` | PROTECT (PR) | PR.DS-10: Integridad de datos en uso; PR.IR-01: Protección contra acceso lógico no autorizado | Validación con esquema (UUID, fechas, email), verificación de `Origin` y rate limit por IP | Medio |
+| Módulo 3: Operaciones / Transacciones (Aarón Líos) | PII de huéspedes (`reservations.guest_*`) | PROTECT (PR) | PR.DS-01: Protección de datos en reposo; PR.AA-05: Control de acceso | Mantener RLS deny-all + `requirePermission(reservations_view)` y reducir el uso de service-role | Medio |
