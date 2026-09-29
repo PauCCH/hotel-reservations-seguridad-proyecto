@@ -71,7 +71,7 @@ _Última actualización: 2026-09-28_
 |---|---|---|---|---|---|
 | Paula | Autenticación | 1 — Diagnóstico | P1.1 Inventario de activos del módulo | — | — |
 | Joseph | Gestión de Usuarios | 1 — Diagnóstico | J1.1 Inventario de activos del módulo | — | — |
-| Aarón | Operaciones / Transacciones | 1 — Diagnóstico | A1.1 Inventario de activos del módulo | — | — |
+| Aarón | Operaciones / Transacciones | 1 — Diagnóstico | A1.2 Mapeo de componentes contra NIST CSF 2.0 | `security/operations/fase1-diagnostico` | — |
 | Fabian | Logs / Auditoría | 1 — Diagnóstico | F1.1 Inventario de activos del módulo | — | — |
 
 ### Estado global del repo
@@ -288,7 +288,7 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 **Subcategorías NIST CSF 2.0 sugeridas:** PR.DS-01/02/10, PR.AA-05, PR.PS-06, ID.AM-07, ID.RA-01, DE.CM-09.
 
 **Fase 1**
-- [ ] A1.1 Inventario de activos (reservas, habitaciones, precios, datos de huéspedes, pasarela de pago).
+- [x] A1.1 Inventario de activos (reservas, habitaciones, precios, datos de huéspedes, pasarela de pago).
 - [ ] A1.2 Mapeo de componentes/endpoints contra NIST CSF 2.0.
 - [ ] A1.3 Impacto operacional y de negocio (GOVERN/IDENTIFY).
 - [ ] A1.4 Línea base de controles PROTECT/DETECT.
@@ -312,8 +312,9 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 **Bitácora**
 | Fecha | Tarea | Rama / commit / PR | Resultado |
 |---|---|---|---|
-| 2026-09-28 | Configuración local (`.env`) y plan de desarrollo | `docs/plan-proyecto-seguridad` | PR abierto |
+| 2026-09-28 | Configuración local (`.env`) y plan de desarrollo | `docs/plan-proyecto-seguridad`, PR #2 | Mergeado a `develop` |
 | 2026-09-28 | G0.2 Plantillas movidas a `plantillas/` | `docs/plan-proyecto-seguridad` | Hecho |
+| 2026-09-28 | A1.1 Inventario de activos (datos, componentes, servicios externos, controles existentes) + 12 observaciones candidatas para Fase 2 | `security/operations/fase1-diagnostico` | Hecho; en `operations/fase-1-diagnostico.md` |
 
 ---
 
