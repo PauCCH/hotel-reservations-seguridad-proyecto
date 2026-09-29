@@ -6,7 +6,7 @@
 | Responsable | Aarón Líos Cubillo |
 | Rama | `security/operations/fase1-diagnostico` |
 | Commit base analizado | `5af5fb1` (`develop`, 2026-09-28) |
-| Estado | A1.1 y A1.2 completos · A1.3–A1.4 pendientes |
+| Estado | A1.1–A1.3 completos · A1.4 pendiente |
 
 ---
 
@@ -229,7 +229,77 @@ ninguna operación del módulo deja rastro de auditoría.
 
 ## 5. A1.3 Impacto operacional y de negocio (GOVERN / IDENTIFY)
 
-_Pendiente._
+### 5.1 Contexto organizacional (GV.OC)
+
+| Subcategoría | Aplicación al módulo |
+|---|---|
+| **GV.OC-01** Misión | El módulo es la **fuente de ingresos directa** del hotel: convierte visitas del portal en reservas pagadas y permite a recepción gestionarlas. |
+| **GV.OC-02** Partes interesadas | **Huéspedes** (PII y pago), **recepción/administradores** (operan reservas y habitaciones), **owner** (fija tarifas, asume el riesgo), **Stripe** (procesador de pago), **equipo de desarrollo**. |
+| **GV.OC-03** Requisitos legales y contractuales | **Ley 8968** de Protección de la Persona frente al Tratamiento de sus Datos Personales (CR): nombre, email y teléfono de huéspedes. **Ley 7472** de Defensa Efectiva del Consumidor: el precio cobrado debe ser el anunciado. **PCI DSS**: al usar Stripe Checkout alojado, el alcance se reduce al mínimo (la tarjeta nunca toca la app), pero la integridad de la redirección y de los montos sigue siendo responsabilidad del hotel. Términos de servicio de Stripe (custodia de la clave secreta). |
+| **GV.OC-04** Servicios críticos que dependen del módulo | Venta de noches (portal), asignación de habitaciones y check-in (recepción), catálogo público de habitaciones y tarifas. |
+| **GV.OC-05** Dependencias del módulo | **Supabase** (Postgres, Storage, Auth: si cae, no hay panel ni catálogo), **Stripe** (sin él no hay cobro; hoy el modo mock lo oculta), módulo de **Autenticación** (sesión y middleware) y de **Usuarios** (permisos `reservations_*`, `rooms_manage`), módulo de **Auditoría** (API `logAuditEvent` para DETECT). |
+
+### 5.2 Roles y apetito de riesgo (GV.RR / GV.RM)
+
+- **Dueño del riesgo del módulo:** el owner del hotel (acepta el riesgo residual). **Responsable técnico:** Aarón.
+- **GV.RM-02 Apetito de riesgo propuesto:**
+  - **Tolerancia cero** a la pérdida de integridad en montos cobrados, confirmación de pago y tarifas.
+  - **Tolerancia muy baja** a la exposición de PII de huéspedes.
+  - **Tolerancia moderada** a la indisponibilidad breve del catálogo o del panel (horas), siempre que las reservas ya pagadas no se pierdan.
+
+### 5.3 Análisis de impacto por proceso de negocio
+
+| Proceso | Activos | Pérdida de C | Pérdida de I | Pérdida de D | Impacto dominante |
+|---|---|---|---|---|---|
+| **P1. Reservar y pagar** (portal) | OP-D03, OP-D08, OP-D09, OP-S01–S05, OP-X01 | Baja: la tarjeta la maneja Stripe | **Crítica**: cobros por monto incorrecto, confirmaciones falsas, reclamos por la Ley 7472 | **Alta**: cada hora sin checkout son ventas perdidas que se van a OTAs (Booking, Expedia) con comisión | Integridad |
+| **P2. Gestionar reservas** (panel) | OP-D01, OP-D02, OP-D07, OP-S07–S09 | **Alta**: filtración de PII de huéspedes (Ley 8968, notificación y sanción) | **Alta**: reservas canceladas que se reactivan o aprobaciones indebidas causan sobreventa y conflictos en recepción | Media: recepción puede operar en papel por un tiempo | Confidencialidad e integridad |
+| **P3. Administrar catálogo** (panel) | OP-D03–D06, OP-S10–S14 | Baja: la información es pública | **Alta**: tarifas alteradas se venden a precio incorrecto; una galería alterada permite defacement o alojar contenido malicioso en el dominio del hotel | Media: habitaciones desactivadas no se venden | Integridad |
+| **P4. Configurar el modo de reservas** | OP-D07, OP-S09 | Baja | **Alta**: pasar a `automatic` aprueba reservas sin revisión; un valor inválido rompe el flujo | Media | Integridad |
+| **P5. Trazabilidad de operaciones** | Ausente (O12) | — | **Alta**: sin registros no se puede atribuir un fraude interno ni reconstruir un incidente (no repudio) | — | Detección |
+
+### 5.4 Escala de valoración
+
+| Nivel | Impacto (I) | Probabilidad (P) |
+|---|---|---|
+| 1 | **Bajo:** molestia, sin pérdida económica ni de datos | **Rara:** exige acceso privilegiado y una cadena compleja |
+| 2 | **Medio:** pérdida económica acotada o afectación operativa de horas | **Posible:** exige cuenta con permisos o condiciones específicas |
+| 3 | **Alto:** pérdida económica directa, afectación a varios huéspedes o incumplimiento legal puntual | **Probable:** explotable con cualquier cuenta autenticada (el registro de clientes es abierto) |
+| 4 | **Crítico:** fraude sistemático, filtración masiva de PII, sanción o daño reputacional severo | **Casi segura:** anónimo, trivial, sin cuenta |
+
+**Riesgo inherente = I × P:** 1–3 **Bajo** · 4–6 **Medio** · 8–9 **Alto** · 12–16 **Crítico**.
+"Inherente" = riesgo del código en `5af5fb1`, antes de los parches de la Fase 3. Los controles que ya
+existen (§2.4) sí se consideran; en la Fase 3 se recalcula como riesgo residual.
+
+### 5.5 Escenarios de riesgo y riesgo inherente (ID.RA-03/04/05)
+
+| ID | Escenario de amenaza | Activo | Ref. | I | P | Riesgo inherente | Justificación |
+|---|---|---|---|---|---|---|---|
+| **OP-R01** | Un usuario autenticado sin permisos (p. ej. un cliente del portal) invoca `galleryActions` para subir, borrar o reordenar imágenes, o sube un HTML/SVG con script al bucket público | OP-D06, OP-S12 | O1, O2, O3 | 3 | 3 | **Alto (9)** | Defacement del catálogo y XSS/phishing servido desde el dominio de Storage del hotel. El registro es abierto y la acción no tiene guard. |
+| **OP-R02** | Un usuario se asigna `role: admin` en `user_metadata` (o la política RLS resulta falsificable) y modifica tarifas o desactiva habitaciones | OP-D03, OP-S10, OP-S13 | O7 | 4 | 2 | **Alto (8)** | Ventas a precio manipulado (Ley 7472) o catálogo inutilizado. P = 2 hasta confirmarlo con la PoC; si se confirma, sube a Crítico (12). |
+| **OP-R03** | Un visitante llega a `/reserve/success` con un `session_id` arbitrario y obtiene una pantalla de pago exitoso con código `HR-…` sin haber pagado; con el gateway mock activo, el pago se omite siempre | OP-D08, OP-D09, OP-S05 | O8 | 2 | 4 | **Alto (8)** | Hoy no crea reserva en BD (limita el impacto), pero permite fraude de mostrador con un comprobante falso. Si la creación de reservas se conecta a este flujo sin verificar el pago, sube a Crítico. |
+| **OP-R04** | Acciones administrativas maliciosas o erróneas (cambios de estado, tarifas, modo de reservas, galería) que no se pueden detectar ni atribuir | Todos | O12 | 3 | 3 | **Alto (9)** | Sin auditoría no hay no repudio ni detección de fraude interno; incumple todo DE.CM del módulo. |
+| **OP-R05** | Un admin con `reservations_edit` reactiva una reserva cancelada o salta estados (`cancelled → approved`, `pending → completed`) | OP-D01, OP-S07 | O4 | 3 | 2 | **Medio (6)** | Sobreventa y conflictos en recepción. Exige un permiso legítimo (amenaza interna o sesión robada). |
+| **OP-R06** | Abuso de `POST /api/checkout`: envío masivo o cross-site de solicitudes con fechas inválidas y cualquier email | OP-S01, OP-X01 | O9 | 2 | 3 | **Medio (6)** | Consumo de la cuota de la API de Stripe, sesiones basura y emails de Stripe a terceros. No hay rate limit ni validación. |
+| **OP-R07** | Se escribe un valor arbitrario en `booking_confirmation_mode` | OP-D07, OP-S09 | O5 | 2 | 2 | **Medio (4)** | Flujo de aprobación roto o ambiguo. Exige `reservations_edit`. |
+| **OP-R08** | Exposición de PII de huéspedes (`reservations`) a quien no tiene `reservations_view` | OP-D02 | — | 4 | 1 | **Medio (4)** | Impacto legal crítico (Ley 8968), pero hoy está bien mitigado: RLS sin políticas y `requirePermission` en todas las lecturas. |
+| **OP-R09** | Manipulación del precio o de las noches desde el cliente durante el checkout | OP-S01–S03 | O9 | 4 | 1 | **Medio (4)** | El servidor recalcula el precio por ID. Queda el caso de fechas inválidas forzadas a 1 noche (P baja, a confirmar en la PoC A2.3). |
+| **OP-R10** | Filtración de `STRIPE_SECRET_KEY` o de `SUPABASE_SERVICE_ROLE_KEY` | OP-X01, OP-X02 | — | 4 | 1 | **Medio (4)** | Solo se usan en el servidor y no están en el repo. El impacto sería total (cobros y reembolsos, BD sin RLS). |
+| **OP-R11** | Enumeración de nombres de habitaciones vía `getRoomNames` sin permiso | OP-S08 | O6 | 1 | 3 | **Bajo (3)** | La información ya es pública en el catálogo. |
+
+### 5.6 Resumen de impacto
+
+- **4 riesgos Altos** (OP-R01 a R04), **6 Medios** y **1 Bajo**. Ninguno es Crítico hoy, pero **OP-R02** y
+  **OP-R03** escalan a Crítico si la PoC confirma el RLS falsificable o si se conecta la creación de
+  reservas al flujo de éxito.
+- **El proceso más expuesto es P1 (reservar y pagar)**, por la integridad de la confirmación de pago, y
+  **P3 (catálogo)**, por control de acceso.
+- **El control ausente de mayor efecto transversal es la auditoría (OP-R04):** eleva la probabilidad
+  efectiva de todos los demás escenarios porque nada se detecta.
+- **Prioridad para la Fase 2:**
+  1. OP-R01 (vectores 1 y 2).
+  2. OP-R02 (vector 1, con Paula).
+  3. OP-R03, OP-R05 y OP-R06 (vector 3).
+  4. OP-R04 (log injection y audit poisoning, con Fabian).
 
 ## 6. A1.4 Línea base de controles PROTECT / DETECT
 
