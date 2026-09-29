@@ -69,7 +69,7 @@ _Última actualización: 2026-09-28_
 
 | Integrante | Módulo | Fase actual | Próxima tarea | Rama activa | Bloqueos |
 |---|---|---|---|---|---|
-| Paula | Autenticación | 1 — Diagnóstico | P1.1 Inventario de activos del módulo | — | — |
+| Paula | Autenticación | 1 — Diagnóstico | P1.2 Mapeo de componentes contra NIST CSF 2.0 | `security/auth/fase1-diagnostico` | — |
 | Joseph | Gestión de Usuarios | 1 — Diagnóstico | J1.1 Inventario de activos del módulo | — | — |
 | Aarón | Operaciones / Transacciones | 1 — Diagnóstico | A1.1 Inventario de activos del módulo | — | — |
 | Fabian | Logs / Auditoría | 1 — Diagnóstico | F1.1 Inventario de activos del módulo | — | — |
@@ -193,7 +193,7 @@ mensajes de error que permiten enumerar usuarios, reflejo de parámetros en pág
 **Subcategorías NIST CSF 2.0 sugeridas:** PR.AA-01/02/03/05, PR.DS-02, DE.CM-01/03, ID.AM-07, GV.RM.
 
 **Fase 1**
-- [ ] P1.1 Inventario de activos (datos: credenciales, sesiones, tokens de activación; servicios: Supabase Auth, OAuth, Resend).
+- [x] P1.1 Inventario de activos (datos: credenciales, sesiones, tokens de activación; servicios: Supabase Auth, OAuth, Resend).
 - [ ] P1.2 Mapeo de componentes/endpoints contra NIST CSF 2.0.
 - [ ] P1.3 Impacto operacional y de negocio (GOVERN/IDENTIFY).
 - [ ] P1.4 Línea base de controles PROTECT/DETECT.
@@ -217,7 +217,8 @@ mensajes de error que permiten enumerar usuarios, reflejo de parámetros en pág
 **Bitácora**
 | Fecha | Tarea | Rama / commit / PR | Resultado |
 |---|---|---|---|
-| | | | |
+| 2026-09-28 | Rama de trabajo de Fase 1 creada | `security/auth/fase1-diagnostico` | Publicada en `origin` |
+| 2026-09-28 | P1.1 Inventario de activos + 12 observaciones preliminares | `security/auth/fase1-diagnostico` | Revisado por Paula, hecho |
 
 ---
 
