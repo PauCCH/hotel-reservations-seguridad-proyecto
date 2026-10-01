@@ -15,6 +15,8 @@ import { CHECKOUT_TEXTS } from "@/features/checkout/i18n/checkout.texts";
 import type { CheckoutTexts } from "@/features/checkout/i18n/checkoutTexts.type";
 import { LAYOUT_TEXTS } from "@/features/layout/i18n/layout.texts";
 import type { LayoutTexts } from "@/features/layout/i18n/layoutTexts.type";
+import { RESERVATION_LOOKUP_TEXTS } from "@/features/reservation-lookup/i18n/reservationLookup.texts";
+import type { ReservationLookupTexts } from "@/features/reservation-lookup/i18n/reservationLookupTexts.type";
 import { ROOM_DETAIL_TEXTS } from "@/features/room-detail/i18n/roomDetail.texts";
 import type { RoomDetailTexts } from "@/features/room-detail/i18n/roomDetailTexts.type";
 import { ROOMS_TEXTS } from "@/features/rooms/i18n/rooms.texts";
@@ -36,6 +38,7 @@ export type AppTranslations = {
   ROOMS: RoomsTexts;
   ROOM_DETAIL: RoomDetailTexts;
   CHECKOUT: CheckoutTexts;
+  RESERVATION_LOOKUP: ReservationLookupTexts;
 };
 
 /**
@@ -51,6 +54,7 @@ export const TRANSLATIONS: Record<SupportedLocale, AppTranslations> = {
     ROOMS: ROOMS_TEXTS.es,
     ROOM_DETAIL: ROOM_DETAIL_TEXTS.es,
     CHECKOUT: CHECKOUT_TEXTS.es,
+    RESERVATION_LOOKUP: RESERVATION_LOOKUP_TEXTS.es,
   },
   [LOCALES.EN]: {
     COMMON: COMMON_TEXTS.en,
@@ -60,6 +64,7 @@ export const TRANSLATIONS: Record<SupportedLocale, AppTranslations> = {
     ROOMS: ROOMS_TEXTS.en,
     ROOM_DETAIL: ROOM_DETAIL_TEXTS.en,
     CHECKOUT: CHECKOUT_TEXTS.en,
+    RESERVATION_LOOKUP: RESERVATION_LOOKUP_TEXTS.en,
   },
 };
 

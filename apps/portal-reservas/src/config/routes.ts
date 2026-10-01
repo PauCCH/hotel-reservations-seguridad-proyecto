@@ -16,6 +16,8 @@ export const ROUTES = Object.freeze({
   RESERVE: "/reserve",
   /** Post-payment success screen (US-DM-06). */
   RESERVE_SUCCESS: "/reserve/success",
+  /** Public "find my reservation" lookup (security project OP-POC-1). */
+  RESERVATIONS_LOOKUP: "/reservations/lookup",
   AUTH: Object.freeze({
     LOGIN: "/auth/login",
     REGISTER: "/auth/register",
@@ -26,5 +28,7 @@ export const ROUTES = Object.freeze({
   API: Object.freeze({
     /** Creates the payment-gateway checkout session (US-DM-06). */
     CHECKOUT: "/api/checkout",
+    /** Public "find my reservation" lookup (security project OP-POC-1). */
+    RESERVATIONS_LOOKUP: "/api/reservations/lookup",
   } as const),
 } as const);
