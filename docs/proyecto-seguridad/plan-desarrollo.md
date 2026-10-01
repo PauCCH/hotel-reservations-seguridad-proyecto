@@ -70,7 +70,7 @@ _Última actualización: 2026-09-28_
 | Integrante | Módulo | Fase actual | Próxima tarea | Rama activa | Bloqueos |
 |---|---|---|---|---|---|
 | Paula | Autenticación | 1 — Diagnóstico | P1.1 Inventario de activos del módulo | — | — |
-| Joseph | Gestión de Usuarios | 1 — Diagnóstico | J1.1 Inventario de activos del módulo | — | — |
+| Joseph | Gestión de Usuarios | 1 — Diagnóstico | J1.5 Revisar y entregar `fase-1-diagnostico.md` (PR a `develop`) | `security/users/fase1-diagnostico` | — |
 | Aarón | Operaciones / Transacciones | 1 — Diagnóstico | A1.5 Revisar y entregar `fase-1-diagnostico.md` (PR a `develop`) | `security/operations/fase1-diagnostico` | — |
 | Fabian | Logs / Auditoría | 1 — Diagnóstico | F1.1 Inventario de activos del módulo | — | — |
 
@@ -240,10 +240,10 @@ usuario (nombre, email) renderizados en tablas y drawers, flujo de invitaciones 
 **Subcategorías NIST CSF 2.0 sugeridas:** PR.AA-05, PR.AA-01, PR.DS-01, ID.AM-07/08, GV.RR, DE.CM-03.
 
 **Fase 1**
-- [ ] J1.1 Inventario de activos (tablas `users`, permisos, invitaciones; roles owner/admin/client).
-- [ ] J1.2 Mapeo de componentes/endpoints contra NIST CSF 2.0.
-- [ ] J1.3 Impacto operacional y de negocio (GOVERN/IDENTIFY).
-- [ ] J1.4 Línea base de controles PROTECT/DETECT.
+- [x] J1.1 Inventario de activos (tablas `users`, permisos, invitaciones; roles owner/admin/client).
+- [x] J1.2 Mapeo de componentes/endpoints contra NIST CSF 2.0.
+- [x] J1.3 Impacto operacional y de negocio (GOVERN/IDENTIFY).
+- [x] J1.4 Línea base de controles PROTECT/DETECT.
 - [ ] J1.5 Entregar `docs/proyecto-seguridad/users/fase-1-diagnostico.md`.
 
 **Fase 2**
@@ -264,7 +264,10 @@ usuario (nombre, email) renderizados en tablas y drawers, flujo de invitaciones 
 **Bitácora**
 | Fecha | Tarea | Rama / commit / PR | Resultado |
 |---|---|---|---|
-| | | | |
+| 2026-09-28 | J1.1 Inventario de activos: 9 activos de datos, 15 componentes, 4 servicios externos, controles existentes y 13 observaciones candidatas para la Fase 2 | `security/users/fase1-diagnostico` | Hecho; en `users/fase-1-diagnostico.md` (§2–§3) |
+| 2026-09-28 | J1.2 Mapeo NIST CSF 2.0: flujo de datos (ID.AM-03), 43 controles evaluados por componente y resumen de cobertura | `security/users/fase1-diagnostico` | Hecho; 14 cumplen, 9 parciales, 18 no cumplen, 2 por verificar; DETECT sin cobertura (§4) |
+| 2026-09-28 | J1.3 Impacto: contexto GV.OC, apetito de riesgo, BIA por proceso, misma escala I×P que Operaciones y 11 escenarios de riesgo inherente | `security/users/fase1-diagnostico` | Hecho; 1 Crítico (provisional), 2 Altos, 6 Medios, 2 Bajos (§5) |
+| 2026-09-28 | J1.4 Línea base: 16 controles (13 PROTECT, 3 DETECT) con estado, brecha, tarea J3.x y coordinación; 7 filas listas para G1 | `security/users/fase1-diagnostico` | Hecho; 2 cumplen, 6 parciales, 8 no cumplen / por verificar (§6–§8) |
 
 ---
 
