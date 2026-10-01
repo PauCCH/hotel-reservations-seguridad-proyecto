@@ -91,19 +91,22 @@ _Última actualización: 2026-09-28_
 
 ## 3. Cronograma e hitos
 
-Fechas propuestas; ajustarlas en equipo y reflejar aquí cualquier cambio.
+Cronograma comprimido a 3 sprints (tablero Jira `AUD`, board "AUD board"), para terminar con margen antes
+de la entrega real: **Sprint 1 — Fase 1** (29 sep–5 oct), **Sprint 2 — Fase 2** (6–12 oct),
+**Sprint 3 — Fase 3** (13–26 oct). Deja ~2 semanas de colchón antes del 9 de nov.
 
 | Hito | Fecha límite | Criterio de terminado |
 |---|---|---|
-| H0 — Arranque | 2026-10-01 | ~~Decisión §4.1 tomada~~ (hecho), plantillas acordadas, cada quien leyó su sección. |
-| H1 — Fase 1 individual | 2026-10-08 | Cada módulo tiene su archivo `fase-1-diagnostico.md` completo. |
-| H1b — Matriz General de Gobernanza | 2026-10-11 | Documento consolidado revisado por los 4. |
-| H2 — Fase 2 individual | 2026-10-22 | Cada módulo con PoC de los 3 vectores + evidencias reproducibles. |
-| H2b — Documento de PoCs | 2026-10-25 | Documento estandarizado consolidado. |
-| H3 — Parches integrados | 2026-11-02 | PRs de cada módulo aprobados y mergeados a `develop`, pruebas de regresión en verde. |
-| H3b — Matriz de riesgo residual + Reporte de parches | 2026-11-05 | Ambos documentos consolidados. |
-| H4 — Videos | 2026-11-07 | 4 videos grabados y revisados contra la regla de §1. |
-| **Entrega** | **2026-11-09 20:00** | Paquete único subido. |
+| H0 — Arranque | 2026-09-28 | ~~Decisión §4.1 tomada~~ (hecho), plantillas acordadas, tablero Jira armado, cada quien leyó su sección. ✅ |
+| H1 — Fase 1 individual (Sprint 1) | 2026-10-05 | Cada módulo tiene su archivo `fase-1-diagnostico.md` completo. |
+| H1b — Matriz General de Gobernanza | 2026-10-06 | Documento consolidado revisado por los 4. |
+| H2 — Fase 2 individual (Sprint 2) | 2026-10-12 | Cada módulo con PoC de los 3 vectores + evidencias reproducibles. |
+| H2b — Documento de PoCs | 2026-10-13 | Documento estandarizado consolidado. |
+| H3 — Parches integrados (Sprint 3) | 2026-10-21 | PRs de cada módulo aprobados y mergeados a `develop`, pruebas de regresión en verde. |
+| H3b — Matriz de riesgo residual + Reporte de parches | 2026-10-23 | Ambos documentos consolidados. |
+| H4 — Videos | 2026-10-25 | 4 videos grabados y revisados contra la regla de §1. |
+| **Entrega interna (equipo)** | **2026-10-26** | Paquete único armado, con margen antes de la fecha real. |
+| **Entrega real (curso)** | **2026-11-09 20:00** | Fecha límite oficial de la profesora — fija, no se comprime. |
 
 ---
 
