@@ -71,7 +71,7 @@ _Última actualización: 2026-10-01_
 |---|---|---|---|---|---|
 | Paula | Autenticación | 1 — Diagnóstico | P1.1 en curso (inventario en su rama, sin PR) | `security/auth/fase1-diagnostico` | — |
 | Joseph | Gestión de Usuarios | 2 — Evaluación ofensiva | J2.1 Vector 1 — servidor (A03 + A01) | — | — |
-| Aarón | Operaciones / Transacciones | 2 — Evaluación ofensiva | A2.1 Vector 1 — servidor (A03 + A01) | `security/operations/fase2-pocs` | G1 espera los diagnósticos de Paula y Fabian (vence 2026-10-06) |
+| Aarón | Operaciones / Transacciones | 2 — Evaluación ofensiva | A2.2 Vector 2 — cliente: XSS stored vía datos del huésped | `security/operations/fase2-pocs` | G1 espera los diagnósticos de Paula y Fabian (vence 2026-10-06) |
 | Fabian | Logs / Auditoría | 1 — Diagnóstico | F1.1 Inventario de activos del módulo | — | — |
 
 ### Estado global del repo
@@ -302,7 +302,7 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 - [x] A1.5 Entregar `docs/proyecto-seguridad/operations/fase-1-diagnostico.md`.
 
 **Fase 2**
-- [ ] A2.1 Vector 1 — servidor: inyección en búsqueda/filtros (A03) e IDOR / cambio de estado sin permiso (A01).
+- [x] A2.1 Vector 1 — servidor: inyección en búsqueda/filtros (A03) e IDOR / cambio de estado sin permiso (A01).
 - [ ] A2.2 Vector 2 — cliente: XSS stored desde datos del huésped hacia el panel.
 - [ ] A2.3 Vector 3 — manipulación de parámetros del checkout (precio/fechas) y CSRF (A08) + log injection.
 - [ ] A2.4 Entregar `operations/fase-2-pocs.md` + evidencias.
@@ -327,6 +327,7 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 | 2026-09-28 | A1.4 Línea base: 16 controles (13 PROTECT, 3 DETECT) con estado, brecha, tarea A3.x y coordinación; 7 filas listas para G1 | `security/operations/fase1-diagnostico` | Hecho; 2 cumplen, 5 parciales, 9 no cumplen / por verificar (commit `95900a9`) |
 | 2026-09-28 | A1.5 Entrega de la Fase 1 | `security/operations/fase1-diagnostico`, PR #3 (merge `d68b50c`) | Mergeado a `develop`; Fase 1 cerrada |
 | 2026-10-01 | Revisión y merge de PR #6 (diagnóstico de Users) y PR #5 (cronograma comprimido a sprints Jira) | merges `9b066e8`, `257db31` | Users aporta 7 filas a G1 con la misma escala I×P; G1 lleva 2 de 4 módulos |
+| 2026-10-01 | A2.1 Vector 1: OP-POC-1 (inyección en filtro PostgREST → IDOR, vulnerabilidad **introducida** sobre `/api/reservations/lookup`, con test de regresión en Vitest) + OP-POC-2 (hallazgo **real**: `galleryActions` sin `requirePermission`, confirma O1/O2) | `security/operations/fase2-pocs` | Hecho; en `operations/fase-2-pocs.md`; pendiente evidencia de red para OP-POC-2 y grabación de `curl` de OP-POC-1 en entorno con conectividad a Supabase (ver nota de entorno en el documento) |
 
 ---
 
