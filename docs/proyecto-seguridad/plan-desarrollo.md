@@ -70,8 +70,8 @@ _Última actualización: 2026-09-28_
 | Integrante | Módulo | Fase actual | Próxima tarea | Rama activa | Bloqueos |
 |---|---|---|---|---|---|
 | Paula | Autenticación | 1 — Diagnóstico | P1.2 Mapeo de componentes contra NIST CSF 2.0 | `security/auth/fase1-diagnostico` | — |
-| Joseph | Gestión de Usuarios | 1 — Diagnóstico | J1.1 Inventario de activos del módulo | — | — |
-| Aarón | Operaciones / Transacciones | 1 — Diagnóstico | A1.1 Inventario de activos del módulo | — | — |
+| Joseph | Gestión de Usuarios | 1 — Diagnóstico | J1.5 Revisar y entregar `fase-1-diagnostico.md` (PR a `develop`) | `security/users/fase1-diagnostico` | — |
+| Aarón | Operaciones / Transacciones | 1 — Diagnóstico | A1.5 Revisar y entregar `fase-1-diagnostico.md` (PR a `develop`) | `security/operations/fase1-diagnostico` | — |
 | Fabian | Logs / Auditoría | 1 — Diagnóstico | F1.1 Inventario de activos del módulo | — | — |
 
 ### Estado global del repo
@@ -91,19 +91,22 @@ _Última actualización: 2026-09-28_
 
 ## 3. Cronograma e hitos
 
-Fechas propuestas; ajustarlas en equipo y reflejar aquí cualquier cambio.
+Cronograma comprimido a 3 sprints (tablero Jira `AUD`, board "AUD board"), para terminar con margen antes
+de la entrega real: **Sprint 1 — Fase 1** (29 sep–5 oct), **Sprint 2 — Fase 2** (6–12 oct),
+**Sprint 3 — Fase 3** (13–26 oct). Deja ~2 semanas de colchón antes del 9 de nov.
 
 | Hito | Fecha límite | Criterio de terminado |
 |---|---|---|
-| H0 — Arranque | 2026-10-01 | ~~Decisión §4.1 tomada~~ (hecho), plantillas acordadas, cada quien leyó su sección. |
-| H1 — Fase 1 individual | 2026-10-08 | Cada módulo tiene su archivo `fase-1-diagnostico.md` completo. |
-| H1b — Matriz General de Gobernanza | 2026-10-11 | Documento consolidado revisado por los 4. |
-| H2 — Fase 2 individual | 2026-10-22 | Cada módulo con PoC de los 3 vectores + evidencias reproducibles. |
-| H2b — Documento de PoCs | 2026-10-25 | Documento estandarizado consolidado. |
-| H3 — Parches integrados | 2026-11-02 | PRs de cada módulo aprobados y mergeados a `develop`, pruebas de regresión en verde. |
-| H3b — Matriz de riesgo residual + Reporte de parches | 2026-11-05 | Ambos documentos consolidados. |
-| H4 — Videos | 2026-11-07 | 4 videos grabados y revisados contra la regla de §1. |
-| **Entrega** | **2026-11-09 20:00** | Paquete único subido. |
+| H0 — Arranque | 2026-09-28 | ~~Decisión §4.1 tomada~~ (hecho), plantillas acordadas, tablero Jira armado, cada quien leyó su sección. ✅ |
+| H1 — Fase 1 individual (Sprint 1) | 2026-10-05 | Cada módulo tiene su archivo `fase-1-diagnostico.md` completo. |
+| H1b — Matriz General de Gobernanza | 2026-10-06 | Documento consolidado revisado por los 4. |
+| H2 — Fase 2 individual (Sprint 2) | 2026-10-12 | Cada módulo con PoC de los 3 vectores + evidencias reproducibles. |
+| H2b — Documento de PoCs | 2026-10-13 | Documento estandarizado consolidado. |
+| H3 — Parches integrados (Sprint 3) | 2026-10-21 | PRs de cada módulo aprobados y mergeados a `develop`, pruebas de regresión en verde. |
+| H3b — Matriz de riesgo residual + Reporte de parches | 2026-10-23 | Ambos documentos consolidados. |
+| H4 — Videos | 2026-10-25 | 4 videos grabados y revisados contra la regla de §1. |
+| **Entrega interna (equipo)** | **2026-10-26** | Paquete único armado, con margen antes de la fecha real. |
+| **Entrega real (curso)** | **2026-11-09 20:00** | Fecha límite oficial de la profesora — fija, no se comprime. |
 
 ---
 
@@ -241,10 +244,10 @@ usuario (nombre, email) renderizados en tablas y drawers, flujo de invitaciones 
 **Subcategorías NIST CSF 2.0 sugeridas:** PR.AA-05, PR.AA-01, PR.DS-01, ID.AM-07/08, GV.RR, DE.CM-03.
 
 **Fase 1**
-- [ ] J1.1 Inventario de activos (tablas `users`, permisos, invitaciones; roles owner/admin/client).
-- [ ] J1.2 Mapeo de componentes/endpoints contra NIST CSF 2.0.
-- [ ] J1.3 Impacto operacional y de negocio (GOVERN/IDENTIFY).
-- [ ] J1.4 Línea base de controles PROTECT/DETECT.
+- [x] J1.1 Inventario de activos (tablas `users`, permisos, invitaciones; roles owner/admin/client).
+- [x] J1.2 Mapeo de componentes/endpoints contra NIST CSF 2.0.
+- [x] J1.3 Impacto operacional y de negocio (GOVERN/IDENTIFY).
+- [x] J1.4 Línea base de controles PROTECT/DETECT.
 - [ ] J1.5 Entregar `docs/proyecto-seguridad/users/fase-1-diagnostico.md`.
 
 **Fase 2**
@@ -265,7 +268,10 @@ usuario (nombre, email) renderizados en tablas y drawers, flujo de invitaciones 
 **Bitácora**
 | Fecha | Tarea | Rama / commit / PR | Resultado |
 |---|---|---|---|
-| | | | |
+| 2026-09-28 | J1.1 Inventario de activos: 9 activos de datos, 15 componentes, 4 servicios externos, controles existentes y 13 observaciones candidatas para la Fase 2 | `security/users/fase1-diagnostico` | Hecho; en `users/fase-1-diagnostico.md` (§2–§3) |
+| 2026-09-28 | J1.2 Mapeo NIST CSF 2.0: flujo de datos (ID.AM-03), 43 controles evaluados por componente y resumen de cobertura | `security/users/fase1-diagnostico` | Hecho; 14 cumplen, 9 parciales, 18 no cumplen, 2 por verificar; DETECT sin cobertura (§4) |
+| 2026-09-28 | J1.3 Impacto: contexto GV.OC, apetito de riesgo, BIA por proceso, misma escala I×P que Operaciones y 11 escenarios de riesgo inherente | `security/users/fase1-diagnostico` | Hecho; 1 Crítico (provisional), 2 Altos, 6 Medios, 2 Bajos (§5) |
+| 2026-09-28 | J1.4 Línea base: 16 controles (13 PROTECT, 3 DETECT) con estado, brecha, tarea J3.x y coordinación; 7 filas listas para G1 | `security/users/fase1-diagnostico` | Hecho; 2 cumplen, 6 parciales, 8 no cumplen / por verificar (§6–§8) |
 
 ---
 
@@ -289,10 +295,10 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 **Subcategorías NIST CSF 2.0 sugeridas:** PR.DS-01/02/10, PR.AA-05, PR.PS-06, ID.AM-07, ID.RA-01, DE.CM-09.
 
 **Fase 1**
-- [ ] A1.1 Inventario de activos (reservas, habitaciones, precios, datos de huéspedes, pasarela de pago).
-- [ ] A1.2 Mapeo de componentes/endpoints contra NIST CSF 2.0.
-- [ ] A1.3 Impacto operacional y de negocio (GOVERN/IDENTIFY).
-- [ ] A1.4 Línea base de controles PROTECT/DETECT.
+- [x] A1.1 Inventario de activos (reservas, habitaciones, precios, datos de huéspedes, pasarela de pago).
+- [x] A1.2 Mapeo de componentes/endpoints contra NIST CSF 2.0.
+- [x] A1.3 Impacto operacional y de negocio (GOVERN/IDENTIFY).
+- [x] A1.4 Línea base de controles PROTECT/DETECT.
 - [ ] A1.5 Entregar `docs/proyecto-seguridad/operations/fase-1-diagnostico.md`.
 
 **Fase 2**
@@ -313,8 +319,12 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 **Bitácora**
 | Fecha | Tarea | Rama / commit / PR | Resultado |
 |---|---|---|---|
-| 2026-09-28 | Configuración local (`.env`) y plan de desarrollo | `docs/plan-proyecto-seguridad` | PR abierto |
+| 2026-09-28 | Configuración local (`.env`) y plan de desarrollo | `docs/plan-proyecto-seguridad`, PR #2 | Mergeado a `develop` |
 | 2026-09-28 | G0.2 Plantillas movidas a `plantillas/` | `docs/plan-proyecto-seguridad` | Hecho |
+| 2026-09-28 | A1.1 Inventario de activos (datos, componentes, servicios externos, controles existentes) + 12 observaciones candidatas para Fase 2 | `security/operations/fase1-diagnostico` | Hecho; en `operations/fase-1-diagnostico.md` (commit `187fd2a`) |
+| 2026-09-28 | A1.2 Mapeo NIST CSF 2.0: flujo de datos (ID.AM-03), 40+ controles evaluados por componente, resumen de cobertura | `security/operations/fase1-diagnostico` | Hecho; DETECT sin cobertura, PR.AA desigual (commit `c52ab13`) |
+| 2026-09-28 | A1.3 Impacto: contexto GV.OC, apetito de riesgo, BIA por proceso, escala I×P y 11 escenarios de riesgo inherente | `security/operations/fase1-diagnostico` | Hecho; 4 Altos (R01–R04), 6 Medios, 1 Bajo (commit `a7b2c68`) |
+| 2026-09-28 | A1.4 Línea base: 16 controles (13 PROTECT, 3 DETECT) con estado, brecha, tarea A3.x y coordinación; 7 filas listas para G1 | `security/operations/fase1-diagnostico` | Hecho; 2 cumplen, 5 parciales, 9 no cumplen / por verificar |
 
 ---
 
