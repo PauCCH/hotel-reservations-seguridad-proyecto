@@ -4,7 +4,7 @@
 - **Rama:** `security/auth/fase1-diagnostico`
 - **Commit base analizado:** `5af5fb1` (`develop`, 2026-09-28) para P1.1; `11fa71e` para P1.2 (el merge de
   `develop` solo trajo documentación, el código del módulo no cambió)
-- **Estado:** P1.1, P1.2 y P1.3 completos · P1.4 pendiente
+- **Estado:** P1.1 a P1.4 completos · pendiente P1.5 (entrega por PR)
 
 > Escala usada para valorar activos (C/I/D = confidencialidad, integridad, disponibilidad):
 > **A** = alto, **M** = medio, **B** = bajo. La criticidad del activo es el valor más alto de las tres.
@@ -358,4 +358,125 @@ controles que ya existen (filas "Cumple" de §3.2). En la Fase 3 se recalcula co
 
 ## 5. Línea base de controles — PROTECT / DETECT (P1.4)
 
-_Pendiente._
+La línea base es el **mínimo de controles** que el módulo debe cumplir para que cada riesgo de §4.5 quede
+en Bajo o Medio:
+- **Estado actual** es el punto de partida de la Fase 3.
+- **Tarea** enlaza con el checklist P3.x del plan.
+- Los controles usan solo **código propio o funciones incluidas en el stack** (Zod, configuración de
+  Supabase Auth, TOTP y captcha gratuitos que Supabase ya soporta, RLS de Postgres, cabeceras de Next.js,
+  `logAuditEvent`). Ninguno requiere herramientas de pago.
+- Los IDs usan el prefijo `AUTH-LB` porque `AUTH-C` ya identifica componentes (§1.4).
+
+### 5.1 Controles PROTECT
+
+| ID | Control requerido (línea base) | Subcategoría | Riesgos | Estado actual | Brecha | Tarea | Coordinar con |
+|---|---|---|---|---|---|---|---|
+| **AUTH-LB01** | **El rol nunca sale de metadata editable**: `handle_new_user` ignora `raw_user_meta_data ->> 'role'` (siempre `client` en el registro) y el rol de una invitación lo fija el servidor (`app_metadata` o `user_roles` con service role) | PR.AA-05, PR.AA-04 | R01 | **No cumple** | Cualquier registro puede declarar su rol (O-02) | P3.1 | **Joseph** (es el mismo control que US-C02: acordar quién escribe la migración) |
+| **AUTH-LB02** | **Activación ligada a una invitación válida**: `completeAdminActivation` comprueba en el servidor que exista una invitación `pending`, no vencida (`expires_at`) y del mismo `user_id`, y que el enlace sea de tipo `invite`. Una cuenta desactivada por el owner no se puede "reactivar" por esta vía | PR.AA-01, ID.AM-08 | R05 | **No cumple** | Cualquier sesión válida pasa a `is_active = true` (O-13) | P3.1 | **Joseph** (máquina de estados de invitaciones, US-C06) |
+| **AUTH-LB03** | **Solo redirecciones internas**: `callbackUrl` se acepta únicamente si es una ruta relativa (empieza con `/`, sin `//` ni `/\`). Si no cumple, se usa `ROUTES.HOME`. `emailRedirectTo` se construye con `ENV.APP_URL` y no con la cabecera `Origin` | PR.DS-10 | R02, R12 | **No cumple** | `redirect()` y `new URL()` aceptan URLs absolutas (O-03, O-07) | P3.3 | — |
+| **AUTH-LB04** | **Política de credenciales aplicada por el proveedor**: `minimum_password_length ≥ 8` con `password_requirements` (mayúsculas, minúsculas, dígitos, símbolos) y `secure_password_change = true`. La activación valida la fuerza también en el servidor | PR.AA-01 | R03 | **No cumple** | El proveedor acepta 6 caracteres y la API directa salta Zod (O-09) | P3.1 | — |
+| **AUTH-LB05** | **Resistencia a fuerza bruta**: captcha en login y registro (Turnstile o hCaptcha, gratuitos e integrados en Supabase), MFA TOTP obligatorio para owner y admins, y límite de intentos fallidos por cuenta además del de IP | PR.AA-03 | R03 | **Parcial**: rate limit por IP de Supabase | Sin captcha, sin MFA, sin límite por cuenta (O-12) | P3.1 / P3.3 | — |
+| **AUTH-LB06** | **Respuestas que no permiten enumerar cuentas**: mismo mensaje y mismo flujo para "credenciales inválidas" y "email sin confirmar". El registro responde igual exista o no la cuenta (el aviso llega por correo) | PR.AA-03 | R09 | **No cumple** | Respuestas distintas según el estado de la cuenta (O-06) | P3.3 | — |
+| **AUTH-LB07** | **Identidad verificada en el servidor y sesión fuera del cliente**: `getUser()` en lugar de `getSession()` en `getInitialAuthStatus` y `getAuthContextAction`. Al navegador solo llegan `user` y `profile`, nunca la `Session` con tokens | PR.AA-04, PR.DS-02 | R06, R10 | **Parcial**: el middleware ya usa `getUser()` | La hidratación SSR confía en la cookie y serializa tokens (O-11, O-15) | P3.1 | **Joseph** (`requirePermission`, US-C09) |
+| **AUTH-LB08** | **Middleware del panel que falla cerrado y exige rol**: además de sesión e `is_active`, exige rol `admin` u `owner`. Si la consulta del perfil falla, redirige al login | PR.AA-05 | R05 (y OP O2) | **Parcial**: exige sesión e `is_active` | Una sesión de cliente pasa y un error de consulta deja pasar | P3.1 | **Joseph**, **Aarón** (lo reportan en Usuarios §4.2 y Operaciones O2) |
+| **AUTH-LB09** | **Cookies de sesión con flags explícitos**: `Secure` y `SameSite=Lax` explícitos en `createSupabaseServerClient`. `HttpOnly` exige mover al servidor el login con Google y la suscripción de sesión del navegador (hoy usan `createBrowserClient`); la decisión se toma en P3.3 | PR.DS-02 | R06 | **Parcial**: `SameSite=Lax` por defecto | Cookies legibles desde JS, sin `Secure` explícito (O-10) | P3.3 | — |
+| **AUTH-LB10** | **CSP y cabeceras de seguridad en las 3 apps**: CSP con nonce (generado en el middleware), `frame-ancestors 'none'`, HSTS, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` y `Permissions-Policy` | PR.PS-01 | R06, R08 | **No cumple** | Ninguna app define cabeceras de seguridad (O-10) | P3.2 | **Todo el equipo** (archivo compartido, §4.4 del plan: avisar antes del merge) |
+| **AUTH-LB11** | **Contenido reflejado solo desde una lista blanca**: `/auth/error` muestra únicamente textos traducidos de códigos conocidos e ignora `error_description` | PR.DS-10 | R08 | **Parcial**: React escapa la salida | Muestra texto arbitrario de la query (O-04) | P3.2 | — |
+| **AUTH-LB12** | **Sin secretos en logs y sin código de auth muerto**: eliminar (o alinear con las apps) las server actions sin uso de `packages/core/src/auth/server` y quitar los `console.log` con tokens o emails | PR.DS-01, ID.AM-08 | R11 | **No cumple** (latente) | El `loginAction` de core imprime el `access_token` (O-01) | P3.4 | — |
+| **AUTH-LB13** | **La autorización no confía en claims del JWT editables o equivocados**: las políticas RLS usan funciones que leen `user_roles` (`is_admin_or_owner()`, `has_permission()`), nunca `auth.jwt() ->> 'role'` ni `user_metadata`. Eliminar el trigger huérfano `sync_role_to_jwt` | PR.AA-04 | R07 | **No cumple** | Políticas con el claim equivocado y rol copiado a metadata editable (O-05) | P3.1 | **Aarón** (dueño de esas políticas), **Joseph** (patrón común de RLS, US-C03) |
+| **AUTH-LB14** | **Autenticación delegada y ciclo de sesión**: PKCE en OAuth, `getUser()` en el middleware, rol leído de `user_roles` en `verifyAdminRole`, JWT de 1 h, rotación de refresh tokens y `signOut()` global | PR.AA-03, PR.AA-04, PR.AA-05 | R02, R10 | **Cumple** | — | Mantener; test de regresión (P3.5) | — |
+| **AUTH-LB15** | **Protección CSRF integrada y secretos solo en el servidor**: verificación de `Origin` de las server actions de Next.js 15, `SUPABASE_SERVICE_ROLE_KEY` sin prefijo `NEXT_PUBLIC_` y funciones `SECURITY DEFINER` con `search_path = ''` | PR.DS-10, PR.DS-01, PR.PS-06 | R01, R12 | **Cumple** | — | Mantener; verificar en la PoC del vector 3 | — |
+
+### 5.2 Controles DETECT
+
+| ID | Control requerido (línea base) | Subcategoría | Riesgos | Estado actual | Brecha | Tarea | Coordinar con |
+|---|---|---|---|---|---|---|---|
+| **AUTH-LB16** | **Auditoría de todos los eventos de autenticación** vía `logAuditEvent`. Eventos mínimos: `auth.login.success` y `auth.login.failed` en ambas apps, `auth.register`, `auth.oauth.success`, `auth.oauth.failed`, `auth.admin.activated`, `auth.activation.failed` y `auth.logout` | DE.CM-03, PR.PS-04 | R04 (soporta R02, R03, R05) | **Parcial**: solo el login del panel | El portal, la activación y el logout no dejan rastro (O-14) | P3.4 | **Fabian** (nuevos `AUDIT_ACTIONS` y guía de uso) |
+| **AUTH-LB17** | **Campos de auditoría saneados y de origen confiable**: email normalizado (minúsculas, sin caracteres de control, longitud máxima), `reason` como código fijo y no el mensaje del proveedor, IP tomada solo del proxy de confianza | PR.PS-04 | R04 | **No cumple** | Email y motivo sin normalizar; IP desde `x-forwarded-for` (O-08) | P3.4 | **Fabian** (dueño de `getAuditRequestContext` y del saneamiento) |
+| **AUTH-LB18** | **Detección de fuerza bruta**: umbral de intentos fallidos por email o IP en una ventana de tiempo, calculado sobre `audit_logs`, que genera un evento `auth.bruteforce.suspected` visible en el visor | DE.AE-02, DE.CM-01 | R03 | **No cumple** | Los ataques de credenciales son invisibles (O-12) | P3.4 | **Fabian** |
+
+### 5.3 Resumen de la línea base
+
+| Estado | PROTECT | DETECT | Total |
+|---|---|---|---|
+| Cumple | 2 (LB14, LB15) | 0 | 2 |
+| Parcial | 5 (LB05, LB07, LB08, LB09, LB11) | 1 (LB16) | 6 |
+| No cumple | 8 (LB01, LB02, LB03, LB04, LB06, LB10, LB12, LB13) | 2 (LB17, LB18) | 10 |
+| **Total** | **15** | **3** | **18** |
+
+**Relación con los riesgos altos y críticos:**
+
+| Riesgo | Controles |
+|---|---|
+| AUTH-R01 | LB01 (+ LB13) |
+| AUTH-R02 | LB03 |
+| AUTH-R03 | LB04, LB05, LB18 |
+| AUTH-R04 | LB16, LB17 |
+
+Con estos controles implementados, el objetivo de la Fase 3 es dejar **R01 y R02 en Bajo** y el resto en
+Bajo o Medio.
+
+**Limitaciones (riesgo residual):**
+- **AUTH-R03 queda en Medio:** el captcha, el MFA y el límite por cuenta frenan la fuerza bruta, pero no
+  eliminan el *credential stuffing* distribuido con contraseñas filtradas. La verificación contra bases de
+  contraseñas filtradas de Supabase es de pago y queda fuera.
+- **AUTH-R04 queda en Medio:** la detección depende de que alguien revise el visor. Las alertas automáticas
+  (SIEM o servicios de pago) quedan fuera por la regla de la profesora.
+- **AUTH-R06 depende de LB09:** si no se puede usar `HttpOnly` sin reescribir el login con Google, la CSP
+  (LB10) es la única barrera contra el robo de sesión por XSS y el riesgo residual queda en Medio.
+
+---
+
+## 6. Coordinación con otros módulos
+
+| Módulo | Qué hay que acordar | Ref. |
+|---|---|---|
+| **Joseph** (Usuarios) | (1) **LB01 = US-C02:** `handle_new_user` es de ambos módulos. Hay que decidir quién escribe la migración y hacer una sola PoC para AUTH-R01 / US-R01. (2) **LB02 + US-C06:** la activación debe consultar el estado de la invitación que su módulo gestiona. (3) **LB07 + US-C09:** `getUser()` también en `requirePermission`. (4) **US-C07:** la revocación de sesión al desactivar una cuenta toca el middleware del panel (LB08). | O-02, O-13, O-11 |
+| **Fabian** (Auditoría) | (1) Lista de `AUDIT_ACTIONS` nuevos de LB16. (2) Saneamiento de campos y origen confiable de la IP (LB17), que vive en `getAuditRequestContext`. (3) Cómo exponer en el visor el evento de fuerza bruta (LB18). | O-08, O-14 |
+| **Aarón** (Operaciones) | (1) **LB13:** sus políticas RLS de `rooms`, `amenities`, `room_schedules` y `room_images` comparan `auth.jwt() ->> 'role'`, que es el rol de Postgres. Hoy fallan cerradas, no son falsificables vía `user_metadata`, lo que cambia el supuesto de OP-R02. (2) **LB08:** el middleware exigirá rol, como pide su O2. | O-05 |
+| **Todo el equipo** | **LB10 (CSP y cabeceras)** se aplica en `next.config.ts` y `middleware.ts` de las 3 apps. Puede romper scripts inline o recursos externos (Stripe, imágenes de Supabase Storage, Google). Se avisa antes del merge y cada quien prueba su módulo. | §4.4 del plan |
+
+Esta coordinación no bloquea la Fase 1: los acuerdos se cierran antes de la Fase 3.
+
+---
+
+## 7. Filas para la Matriz General de Gobernanza (G1)
+
+Formato de `plantillas/matriz-general-gobernanza.xlsx`, listo para consolidar. La primera fila es el
+**mismo riesgo** que la primera fila de Usuarios y se consolida en una sola.
+
+| Módulo y responsable | Activo crítico | Función NIST CSF | Categoría / subcategoría NIST CSF | Control de seguridad requerido (línea base) | Nivel de riesgo inherente |
+|---|---|---|---|---|---|
+| Módulo 1: Autenticación (Paula) | Rol inicial de cada cuenta (`auth.users`, `user_roles`, trigger `handle_new_user`) — compartido con Usuarios | PROTECT (PR) | PR.AA-05: Permisos gestionados con menor privilegio; PR.AA-04: Aserciones de identidad protegidas y verificadas | Asignar el rol solo desde datos que fija el servidor e ignorar `user_metadata` en el trigger | Crítico (provisional) |
+| Módulo 1: Autenticación (Paula) | Redirecciones posteriores al login (`callbackUrl` en `/auth/login` y `/auth/callback`, `emailRedirectTo`) | PROTECT (PR) | PR.DS-10: Integridad de datos en uso | Aceptar solo rutas internas relativas y construir los enlaces de correo con la URL configurada, no con `Origin` | Alto |
+| Módulo 1: Autenticación (Paula) | Credenciales de clientes y personal (`auth.users`), endpoints de login del portal, del panel y de la API de Supabase | PROTECT (PR) | PR.AA-01: Identidades y credenciales gestionadas; PR.AA-03: Usuarios autenticados | Política de contraseñas en el proveedor, captcha, MFA TOTP para personal y límite de intentos por cuenta | Alto |
+| Módulo 1: Autenticación (Paula) | Trazabilidad de eventos de autenticación (`audit_logs`) | DETECT (DE) | DE.CM-03: Monitoreo de actividad del personal; DE.AE-02: Análisis de eventos adversos; PR.PS-04: Generación de registros | Registrar todos los eventos de auth con campos saneados e IP confiable, y detectar intentos fallidos repetidos | Alto |
+| Módulo 1: Autenticación (Paula) | Activación de cuentas de administrador (`activateAdminAction`, `completeAdminActivation`, `pending_invitations`) | PROTECT (PR) | PR.AA-01: Identidades gestionadas durante su ciclo de vida; ID.AM-08: Ciclo de vida de sistemas y datos | Exigir una invitación pendiente, vigente y del mismo usuario antes de activar; impedir que una cuenta desactivada se reactive sola | Medio |
+| Módulo 1: Autenticación (Paula) | Sesión del usuario (cookies `sb-*-auth-token`, hidratación SSR, cabeceras HTTP) | PROTECT (PR) | PR.DS-02: Protección de datos en tránsito; PR.PS-01: Gestión de configuración; PR.AA-04: Aserciones verificadas | Cookies `Secure`/`SameSite` (y `HttpOnly` si es viable), CSP y cabeceras de seguridad, `getUser()` en el servidor y sin tokens en el payload del cliente | Medio |
+| Módulo 1: Autenticación (Paula) | Claims del JWT usados en políticas RLS (`auth.jwt()`, trigger `sync_role_to_jwt`) | PROTECT (PR) | PR.AA-04: Aserciones de identidad protegidas y verificadas | Autorizar con funciones que leen `user_roles`, nunca con claims editables o con el rol de Postgres | Medio |
+
+---
+
+## 8. Límites del análisis y puntos por verificar
+
+Este diagnóstico es **estático**: se leyeron el código, las migraciones y `config.toml` en `11fa71e`. No se
+ejecutó nada ni se consultó el proyecto remoto de Supabase. Quedan para la Fase 2, o para una revisión de la
+configuración remota con autorización:
+
+1. ¿Llega `user_metadata.role` a `user_roles` en un registro hecho directo contra la API? (AUTH-R01; PoC
+   conjunta con Joseph)
+2. ¿Acepta `completeAdminActivation` tokens de una sesión normal, sin invitación, y deja la cuenta con
+   `is_active = true`? (AUTH-R05)
+3. ¿Qué tiene la configuración remota de Auth? Hay que revisar:
+   - política de contraseñas;
+   - confirmación de correo;
+   - lista de redirecciones permitidas (comodines);
+   - MFA;
+   - captcha;
+   - SMTP;
+   - vigencia del enlace de invitación.
+   `config.toml` solo describe el entorno local. (O-07, O-09, O-12)
+4. ¿Existe en la BD el trigger `on_user_role_updated`, o `sync_role_to_jwt` quedó sin efecto? (O-05)
+5. ¿Es viable `HttpOnly` sin reescribir el login con Google y la suscripción de sesión del navegador? (LB09)
+6. La PoC del vector 2 probablemente requiera una vulnerabilidad **introducida** en una rama
+   `security/auth/fase2-*` (§4.1 del plan), porque React escapa la salida de `/auth/error` (O-04).
