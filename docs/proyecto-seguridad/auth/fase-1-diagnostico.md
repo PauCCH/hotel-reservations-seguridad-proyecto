@@ -4,7 +4,7 @@
 - **Rama:** `security/auth/fase1-diagnostico`
 - **Commit base analizado:** `5af5fb1` (`develop`, 2026-09-28) para P1.1; `11fa71e` para P1.2 (el merge de
   `develop` solo trajo documentación, el código del módulo no cambió)
-- **Estado:** P1.1 y P1.2 completos · P1.3–P1.4 pendientes
+- **Estado:** P1.1, P1.2 y P1.3 completos · P1.4 pendiente
 
 > Escala usada para valorar activos (C/I/D = confidencialidad, integridad, disponibilidad):
 > **A** = alto, **M** = medio, **B** = bajo. La criticidad del activo es el valor más alto de las tres.
@@ -265,7 +265,96 @@ generan eventos, y no hay detección de fuerza bruta.
 
 ## 4. Impacto operacional y de negocio — GOVERN / IDENTIFY (P1.3)
 
-_Pendiente._
+### 4.1 Contexto organizacional (GV.OC)
+
+| Subcategoría | Aplicación al módulo |
+|---|---|
+| **GV.OC-01** Misión | El módulo **establece quién es cada persona** que usa el sistema: clientes que reservan en el portal y personal que opera el hotel desde el panel. Todo control de acceso de los demás módulos (permisos de Usuarios, RLS de Operaciones, visor de Auditoría) parte de la identidad y la sesión que emite este módulo. Si falla, los demás controles autorizan a la persona equivocada. |
+| **GV.OC-02** Partes interesadas | **Clientes** (crean su cuenta en el portal; sus credenciales y su email son PII), **owner y administradores** (sus cuentas dan acceso a reservas, tarifas y datos de huéspedes), **invitados** (admins en proceso de activación), **Supabase** (proveedor de identidad, emite y firma los JWT), **Google** (proveedor OAuth) y el **equipo de desarrollo**. |
+| **GV.OC-03** Requisitos legales y contractuales | **Ley 8968** de Protección de la Persona frente al Tratamiento de sus Datos Personales (CR): credenciales, email y nombre de clientes y personal, con el deber de adoptar medidas de seguridad y de poder atribuir accesos ante un incidente. Términos de Supabase y de Google Cloud (custodia de la service role key y del client secret de OAuth). |
+| **GV.OC-04** Servicios críticos que dependen del módulo | Inicio de sesión en el portal (requisito para reservar con cuenta), acceso al panel completo (reservas, habitaciones, CMS, auditoría, gestión de personal), activación de nuevo personal y verificación de email de clientes. |
+| **GV.OC-05** Dependencias del módulo | **Supabase Auth** (sin él nadie puede iniciar sesión), **Postgres** de Supabase (`profiles`, `user_roles`), **Google OAuth**, **SMTP del proyecto** (correos de invitación y verificación), módulo de **Usuarios** (crea las invitaciones que este módulo activa), módulo de **Auditoría** (`logAuditEvent` para DETECT) y la configuración de **Next.js** (middleware, cabeceras y cookies de las 3 apps). |
+
+### 4.2 Roles y apetito de riesgo (GV.RR / GV.RM)
+
+- **Dueño del riesgo del módulo:** el owner del hotel. **Responsable técnico:** Paula.
+- **GV.RR-02 Roles y autoridades:**
+  - El módulo **autentica**; la autorización fina (permisos) es de Usuarios.
+  - Se reconocen tres tipos de identidad: `owner`, `admin` y `client`.
+  - La regla de negocio es que solo el owner o un admin con `admins:invite` crea cuentas de personal. Hoy
+    no se cumple en la capa de auth: el rol puede venir de la metadata del registro (O-02) y la activación
+    no exige invitación (O-13).
+  - Las responsabilidades sobre la configuración de Supabase Auth (política de contraseñas, lista de
+    redirecciones, SMTP, MFA) no están asignadas ni documentadas.
+- **GV.RM-02 Apetito de riesgo propuesto:**
+  - **Tolerancia cero** a que alguien se autentique como otra persona o nazca con un rol privilegiado sin autorización.
+  - **Tolerancia cero** a que una cuenta desactivada recupere el acceso sin intervención del owner.
+  - **Tolerancia muy baja** a la exposición de credenciales, tokens de sesión o PII de cuentas.
+  - **Tolerancia baja** a que el dominio del hotel sirva de trampolín para phishing (redirecciones o mensajes falsos).
+  - **Tolerancia moderada** a una indisponibilidad breve del login del portal: se puede reservar por otros
+    canales. Para el panel la tolerancia es baja, porque detiene la operación de recepción.
+
+### 4.3 Análisis de impacto por proceso de negocio
+
+| Proceso | Activos | Pérdida de C | Pérdida de I | Pérdida de D | Impacto dominante |
+|---|---|---|---|---|---|
+| **P1. Inicio de sesión** (portal y panel) | AUTH-D01, D02, C02, C03, S01, S02 | **Alta**: credenciales y sesiones comprometidas dan acceso a PII de huéspedes (panel) o a las reservas del cliente (portal) | **Alta**: una sesión robada actúa en nombre de la víctima | **Alta** en el panel (recepción detenida); media en el portal | Confidencialidad |
+| **P2. Registro, verificación de email y OAuth** (portal) | AUTH-D08, D09, D10, C04, C05, B01 | Media: revela qué emails tienen cuenta | **Crítica**: es donde nace la identidad y, por el trigger, el rol | **Alta**: si el registro o el callback fallan, no entran clientes nuevos | Integridad |
+| **P3. Activación de cuentas de administrador** | AUTH-D06, D07, C08, C09 | Media: los enlaces de invitación contienen tokens de sesión | **Crítica**: decide qué cuenta pasa a `is_active = true` en el panel | Baja: retrasa la incorporación de personal | Integridad |
+| **P4. Gestión de sesión y protección de rutas** (cookies, middleware, SSR, cierre de sesión) | AUTH-D02, D03, C10–C18, K06 | **Alta**: tokens legibles desde JS o serializados al cliente | **Alta**: si el middleware o la sesión se saltan, cualquier ruta del panel queda expuesta | Media: un fallo cerrado deja a todos fuera | Confidencialidad e integridad |
+| **P5. Trazabilidad de eventos de autenticación** | AUTH-D11, audit_logs | Media: el log contiene emails e IPs | **Alta**: sin rastro completo y confiable no se atribuye un acceso ni se detecta fuerza bruta (no repudio) | — | Detección |
+
+### 4.4 Escala de valoración
+
+Se usa **la misma escala de los módulos de Operaciones y Usuarios** para que las filas de la Matriz
+General de Gobernanza (G1) sean comparables.
+
+| Nivel | Impacto (I) | Probabilidad (P) |
+|---|---|---|
+| 1 | **Bajo:** molestia, sin pérdida económica ni de datos | **Rara:** exige acceso privilegiado y una cadena compleja |
+| 2 | **Medio:** pérdida económica acotada o afectación operativa de horas | **Posible:** exige cuenta con permisos o condiciones específicas |
+| 3 | **Alto:** pérdida económica directa, afectación a varias personas o incumplimiento legal puntual | **Probable:** explotable con cualquier cuenta autenticada (el registro de clientes es abierto) |
+| 4 | **Crítico:** control total del sistema, filtración masiva de PII, sanción o daño reputacional severo | **Casi segura:** anónimo, trivial, sin cuenta |
+
+**Riesgo inherente = I × P:** 1–3 **Bajo** · 4–6 **Medio** · 8–9 **Alto** · 12–16 **Crítico**.
+
+"Inherente" significa el riesgo del código en `11fa71e`, antes de los parches de la Fase 3, contando los
+controles que ya existen (filas "Cumple" de §3.2). En la Fase 3 se recalcula como riesgo residual.
+
+### 4.5 Escenarios de riesgo y riesgo inherente (ID.RA-03/04/05)
+
+| ID | Escenario de amenaza | Activo | Ref. | I | P | Riesgo inherente | Justificación |
+|---|---|---|---|---|---|---|---|
+| **AUTH-R01** | Alguien se registra llamando a `/auth/v1/signup` con la anon key y `data: {"role": "owner"}`; el trigger `handle_new_user` le asigna ese rol | AUTH-D04, D10, B01, K02 | O-02 | 4 | 3 | **Crítico (12)** *(provisional)* | **Mismo riesgo que US-R01 de Usuarios**; en G1 se cuenta una sola vez. Control total del panel. `enable_signup = true` y la anon key es pública. **Provisional:** baja a Alto (8) si la PoC muestra que el campo no llega a `user_roles`. |
+| **AUTH-R02** | Un enlace legítimo del hotel (`/auth/login?callbackUrl=https://…` o `/auth/callback`) redirige a un sitio falso después del login, que pide de nuevo la contraseña o los datos de pago | AUTH-D01, D08, C03, C05 | O-03 | 3 | 3 | **Alto (9)** | Phishing creíble con dominio real y sesión ya iniciada; afecta a muchos clientes a la vez. P = 3: anónimo y trivial de armar, pero exige que la víctima abra el enlace. |
+| **AUTH-R03** | Fuerza bruta o *credential stuffing* contra el login del portal, del panel o directo contra la API de Supabase, sin MFA y con contraseñas de 6 caracteres permitidas | AUTH-D01, S01, S02 | O-09, O-12 | 3 | 3 | **Alto (9)** | Una cuenta de admin comprometida da acceso a reservas con PII. El rate limit por IP se esquiva rotando IPs. MFA está deshabilitado (`[auth.mfa.totp] enroll_enabled = false`). |
+| **AUTH-R04** | Accesos, registros, activaciones y cierres de sesión no quedan registrados (o se registran con IP y campos falsificables) y no se pueden atribuir ni detectar | AUTH-D11 | O-08, O-14 | 3 | 3 | **Alto (9)** | Mismo criterio que OP-R04 y US-R03. Solo el login del panel deja rastro. Sin eventos del portal no hay forma de detectar R02 ni R03. |
+| **AUTH-R05** | Un admin desactivado obtiene tokens directo de la API con su contraseña y los envía a `activateAdminAction`; queda con `is_active = true` y recupera el acceso al panel con sus permisos anteriores | AUTH-D05, D06, C08, C09 | O-13 | 3 | 2 | **Medio (6)** | Contradice la tolerancia cero a reactivaciones. P = 2: exige haber sido admin y conservar la contraseña (ex empleado o cuenta comprometida). |
+| **AUTH-R06** | Un XSS en cualquiera de las 3 apps lee las cookies de sesión (sin `HttpOnly`) o el `refresh_token` serializado en la página, y el atacante secuestra la sesión de un admin | AUTH-D02, C17, C18, K06 | O-10, O-15 | 3 | 2 | **Medio (6)** | Sin CSP, nada limita el script. P = 2: exige un XSS previo; React escapa por defecto, pero Operaciones (O3) y Usuarios (O11) tienen candidatos. Este escenario **amplifica** los XSS de los demás módulos. |
+| **AUTH-R07** | La autorización de otros módulos confía en claims del JWT: las políticas RLS comparan `auth.jwt() ->> 'role' = 'admin'` y el trigger `sync_role_to_jwt` quedó huérfano | AUTH-D03, B02 | O-05 | 2 | 2 | **Medio (4)** | En Supabase ese claim es el rol de Postgres (`authenticated`), no el rol de negocio. Las políticas fallan cerradas (nadie es "admin" vía RLS), lo que afecta la disponibilidad. Si alguien las "arregla" leyendo `user_metadata.role`, quedarían falsificables (relación con OP-R02, coordinar con Aarón). |
+| **AUTH-R08** | Mensajes falsos en `/auth/error?error_description=…` (por ejemplo, "llame a este número para validar su tarjeta") servidos desde el dominio del hotel | AUTH-C06 | O-04 | 2 | 3 | **Medio (6)** | Inyección de contenido para ingeniería social; no ejecuta script porque React escapa la salida. Sube a Alto si la PoC logra XSS. |
+| **AUTH-R09** | Enumeración de cuentas por la respuesta del registro (`EMAIL_ALREADY_REGISTERED`) o del login (email sin confirmar) | AUTH-D01, C03, C04 | O-06 | 1 | 4 | **Medio (4)** | Por sí sola no da acceso, pero confirma objetivos válidos para R03 y para phishing dirigido. Anónima y trivial. |
+| **AUTH-R10** | Una cookie de sesión forjada con el `user_id` de otra persona hace que `getInitialAuthStatus` devuelva su perfil, rol y permisos en las páginas fuera de `/admin` | AUTH-C11, C18 | O-11 | 2 | 1 | **Bajo (2)** | Exige conocer un UUID válido y solo expone datos de perfil; el middleware sí revalida en `/admin/**`. |
+| **AUTH-R11** | Alguien reutiliza el `loginAction` de core (sin uso hoy) y los `access_token` empiezan a quedar en los logs del servidor o del proveedor de hosting | AUTH-D12, C01 | O-01 | 3 | 1 | **Bajo (3)** | Riesgo latente: hoy no se ejecuta. Quien lea los logs podría suplantar sesiones durante 1 h. |
+| **AUTH-R12** | Una cabecera `Origin` manipulada hace que el correo de verificación apunte a un dominio del atacante | AUTH-D09, C03, C04 | O-07 | 3 | 1 | **Bajo (3)** | Supabase solo acepta URLs de su lista de redirecciones permitidas. P sube si la lista del proyecto remoto incluye comodines. |
+
+### 4.6 Resumen de impacto
+
+- **Conteo:** 1 riesgo Crítico (AUTH-R01, provisional y compartido con US-R01), 3 Altos (R02 a R04),
+  5 Medios (R05 a R09) y 3 Bajos (R10 a R12).
+- **Procesos más expuestos:**
+  - **P2 (registro):** la identidad y el rol nacen de datos que controla quien se registra.
+  - **P1 (inicio de sesión):** sin MFA, sin bloqueo por cuenta y con redirección abierta después del login.
+- **Control ausente de mayor efecto transversal:** la **higiene de sesión** (CSP, cookies `HttpOnly`) y la
+  **auditoría de auth**. La primera convierte cualquier XSS del sistema en robo de sesión (R06); la segunda
+  impide detectar R02, R03 y R05.
+- **Prioridad para la Fase 2:**
+  1. AUTH-R01 (vector 1). PoC conjunta con Joseph para no duplicar esfuerzo.
+  2. AUTH-R05 (vector 1: control de acceso, evasión de la desactivación).
+  3. AUTH-R02 y AUTH-R12 (vector 3: manipulación de parámetros de redirección).
+  4. AUTH-R08 y AUTH-R06 (vector 2: reflejo en `/auth/error` y efecto de un XSS sobre la sesión). Si no se
+     logra XSS real, usar una vulnerabilidad **introducida** (§4.1 del plan).
+  5. AUTH-R04 (log injection en los eventos de login, con Fabian).
 
 ## 5. Línea base de controles — PROTECT / DETECT (P1.4)
 
