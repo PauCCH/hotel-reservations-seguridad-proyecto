@@ -69,7 +69,7 @@ _Última actualización: 2026-09-28_
 
 | Integrante | Módulo | Fase actual | Próxima tarea | Rama activa | Bloqueos |
 |---|---|---|---|---|---|
-| Paula | Autenticación | 1 — Diagnóstico | P1.2 Mapeo de componentes contra NIST CSF 2.0 | `security/auth/fase1-diagnostico` | — |
+| Paula | Autenticación | 1 — Diagnóstico | P1.3 Impacto operacional y de negocio (GOVERN/IDENTIFY) | `security/auth/fase1-diagnostico` | — |
 | Joseph | Gestión de Usuarios | 1 — Diagnóstico | J1.5 Revisar y entregar `fase-1-diagnostico.md` (PR a `develop`) | `security/users/fase1-diagnostico` | — |
 | Aarón | Operaciones / Transacciones | 1 — Diagnóstico | A1.5 Revisar y entregar `fase-1-diagnostico.md` (PR a `develop`) | `security/operations/fase1-diagnostico` | — |
 | Fabian | Logs / Auditoría | 1 — Diagnóstico | F1.1 Inventario de activos del módulo | — | — |
@@ -197,7 +197,7 @@ mensajes de error que permiten enumerar usuarios, reflejo de parámetros en pág
 
 **Fase 1**
 - [x] P1.1 Inventario de activos (datos: credenciales, sesiones, tokens de activación; servicios: Supabase Auth, OAuth, Resend).
-- [ ] P1.2 Mapeo de componentes/endpoints contra NIST CSF 2.0.
+- [x] P1.2 Mapeo de componentes/endpoints contra NIST CSF 2.0.
 - [ ] P1.3 Impacto operacional y de negocio (GOVERN/IDENTIFY).
 - [ ] P1.4 Línea base de controles PROTECT/DETECT.
 - [ ] P1.5 Entregar `docs/proyecto-seguridad/auth/fase-1-diagnostico.md`.
@@ -221,7 +221,9 @@ mensajes de error que permiten enumerar usuarios, reflejo de parámetros en pág
 | Fecha | Tarea | Rama / commit / PR | Resultado |
 |---|---|---|---|
 | 2026-09-28 | Rama de trabajo de Fase 1 creada | `security/auth/fase1-diagnostico` | Publicada en `origin` |
-| 2026-09-28 | P1.1 Inventario de activos + 12 observaciones preliminares | `security/auth/fase1-diagnostico` | Revisado por Paula, hecho |
+| 2026-09-28 | P1.1 Inventario de activos + 12 observaciones preliminares | `security/auth/fase1-diagnostico`, commit `04ef70e` | Revisado por Paula, hecho |
+| 2026-10-03 | Merge de `develop` en la rama (conflicto en el tablero §2 resuelto) | `security/auth/fase1-diagnostico`, commit `11fa71e` | Hecho |
+| 2026-10-03 | P1.2 Mapeo NIST CSF 2.0: flujo de datos (ID.AM-03), 42 controles evaluados por componente y resumen de cobertura; 3 observaciones nuevas (O-13 a O-15) | `security/auth/fase1-diagnostico` | Hecho; 14 cumplen, 14 parciales, 10 no cumplen, 4 por verificar; DETECT casi nulo (§3) |
 
 ---
 
