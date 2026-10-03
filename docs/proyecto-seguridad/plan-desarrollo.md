@@ -65,14 +65,14 @@ Cuando la persona se identifique:
 
 ## 2. Tablero de estado (actualizar siempre)
 
-_Última actualización: 2026-09-28_
+_Última actualización: 2026-10-02_
 
 | Integrante | Módulo | Fase actual | Próxima tarea | Rama activa | Bloqueos |
 |---|---|---|---|---|---|
-| Paula | Autenticación | 1 — Diagnóstico | P1.1 Inventario de activos del módulo | — | — |
-| Joseph | Gestión de Usuarios | 1 — Diagnóstico | J1.5 Revisar y entregar `fase-1-diagnostico.md` (PR a `develop`) | `security/users/fase1-diagnostico` | — |
-| Aarón | Operaciones / Transacciones | 1 — Diagnóstico | A1.5 Revisar y entregar `fase-1-diagnostico.md` (PR a `develop`) | `security/operations/fase1-diagnostico` | — |
-| Fabian | Logs / Auditoría | 1 — Diagnóstico | F1.1 Inventario de activos del módulo | — | — |
+| Paula | Autenticación | 1 — Diagnóstico | P1.1 Inventario de activos del módulo | `security/auth/fase1-diagnostico` (sin commits en `develop`) | — |
+| Joseph | Gestión de Usuarios | 1 — Diagnóstico ✅ | J2.1 Vector 1 (servidor): A03 + A01 | `security/users/fase1-diagnostico` (mergeada, PR #6) | — |
+| Aarón | Operaciones / Transacciones | 2 — Evaluación ofensiva | A2.1 Vector 1 (servidor): A03 + A01 | `security/operations/fase2-pocs` | — |
+| Fabian | Logs / Auditoría | 1 — Diagnóstico | F1.5 Revisar y entregar `fase-1-diagnostico.md` (PR a `develop`) | `security/audit/fase1-diagnostico` | — |
 
 ### Estado global del repo
 - [x] Monorepo levantable con `.env` de Supabase/Resend (2026-09-28).
@@ -347,10 +347,10 @@ de hash) y cobertura de eventos de los otros módulos.
 (idealmente antes de H2) la guía de uso y los nuevos `AUDIT_ACTIONS` que necesita cada módulo.
 
 **Fase 1**
-- [ ] F1.1 Inventario de activos (tabla `audit_logs`, permiso `audit:view`, visor, contexto de request).
-- [ ] F1.2 Mapeo de componentes/endpoints contra NIST CSF 2.0.
-- [ ] F1.3 Impacto operacional y de negocio (GOVERN/IDENTIFY).
-- [ ] F1.4 Línea base de controles PROTECT/DETECT.
+- [x] F1.1 Inventario de activos (tabla `audit_logs`, permiso `audit:view`, visor, contexto de request).
+- [x] F1.2 Mapeo de componentes/endpoints contra NIST CSF 2.0.
+- [x] F1.3 Impacto operacional y de negocio (GOVERN/IDENTIFY).
+- [x] F1.4 Línea base de controles PROTECT/DETECT.
 - [ ] F1.5 Entregar `docs/proyecto-seguridad/audit/fase-1-diagnostico.md`.
 
 **Fase 2**
@@ -372,6 +372,7 @@ de hash) y cobertura de eventos de los otros módulos.
 | Fecha | Tarea | Rama / commit / PR | Resultado |
 |---|---|---|---|
 | 2026-09-23 | Scaffold del módulo de auditoría (tabla, servicio, UI, IP/UA en login) | `feature/audit-log-module-scaffold`, PR #1 | Mergeado a `develop` |
+| 2026-10-02 | F1.1–F1.4: `docs/proyecto-seguridad/audit/fase-1-diagnostico.md` sobre `257db31` | `security/audit/fase1-diagnostico` | 7 activos de datos, 15 de software, 15 observaciones, 12 escenarios de riesgo (2 Críticos, 3 Altos) y 19 controles de línea base. Los 3 vectores del enunciado tienen hallazgo real. Pendiente F1.5 (PR) |
 
 ---
 
