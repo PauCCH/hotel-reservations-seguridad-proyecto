@@ -65,18 +65,14 @@ Cuando la persona se identifique:
 
 ## 2. Tablero de estado (actualizar siempre)
 
-_Última actualización: 2026-10-02_
+_Última actualización: 2026-10-05_
 
 | Integrante | Módulo | Fase actual | Próxima tarea | Rama activa | Bloqueos |
 |---|---|---|---|---|---|
-| Paula | Autenticación | 1 — Diagnóstico | P1.1 Inventario de activos del módulo | `security/auth/fase1-diagnostico` (sin commits en `develop`) | — |
-| Joseph | Gestión de Usuarios | 1 — Diagnóstico ✅ | J2.1 Vector 1 (servidor): A03 + A01 | `security/users/fase1-diagnostico` (mergeada, PR #6) | — |
-| Aarón | Operaciones / Transacciones | 2 — Evaluación ofensiva | A2.1 Vector 1 (servidor): A03 + A01 | `security/operations/fase2-pocs` | — |
-| Fabian | Logs / Auditoría | 1 — Diagnóstico | F1.5 Revisar y entregar `fase-1-diagnostico.md` (PR a `develop`) | `security/audit/fase1-diagnostico` | — |
-| Paula | Autenticación | 1 — Diagnóstico | P1.5 Revisar y entregar `fase-1-diagnostico.md` (PR a `develop`) | `security/auth/fase1-diagnostico` | — |
-| Joseph | Gestión de Usuarios | 1 — Diagnóstico | J1.5 Revisar y entregar `fase-1-diagnostico.md` (PR a `develop`) | `security/users/fase1-diagnostico` | — |
-| Aarón | Operaciones / Transacciones | 1 — Diagnóstico | A1.5 Revisar y entregar `fase-1-diagnostico.md` (PR a `develop`) | `security/operations/fase1-diagnostico` | — |
-| Fabian | Logs / Auditoría | 1 — Diagnóstico | F1.1 Inventario de activos del módulo | — | — |
+| Paula | Autenticación | 2 — Evaluación ofensiva | P2.1 Vector 1 — servidor (A03 + A01/JWT) | — | — |
+| Joseph | Gestión de Usuarios | 2 — Evaluación ofensiva | J2.1 Vector 1 — servidor (A03 + A01) | — | — |
+| Aarón | Operaciones / Transacciones | 2 — Evaluación ofensiva | A2.2 Vector 2 — cliente: XSS stored vía datos del huésped | `security/operations/fase2-pocs` | — |
+| Fabian | Logs / Auditoría | 2 — Evaluación ofensiva | F2.1 Vector 1 — servidor (A03 + A01) | — | — |
 
 ### Estado global del repo
 - [x] Monorepo levantable con `.env` de Supabase/Resend (2026-09-28).
@@ -103,7 +99,7 @@ de la entrega real: **Sprint 1 — Fase 1** (29 sep–5 oct), **Sprint 2 — Fas
 |---|---|---|
 | H0 — Arranque | 2026-09-28 | ~~Decisión §4.1 tomada~~ (hecho), plantillas acordadas, tablero Jira armado, cada quien leyó su sección. ✅ |
 | H1 — Fase 1 individual (Sprint 1) | 2026-10-05 | Cada módulo tiene su archivo `fase-1-diagnostico.md` completo. |
-| H1b — Matriz General de Gobernanza | 2026-10-06 | Documento consolidado revisado por los 4. |
+| H1b — Matriz General de Gobernanza | 2026-10-06 | Documento consolidado revisado por los 4. ✅ (aprobado 2026-10-05) |
 | H2 — Fase 2 individual (Sprint 2) | 2026-10-12 | Cada módulo con PoC de los 3 vectores + evidencias reproducibles. |
 | H2b — Documento de PoCs | 2026-10-13 | Documento estandarizado consolidado. |
 | H3 — Parches integrados (Sprint 3) | 2026-10-21 | PRs de cada módulo aprobados y mergeados a `develop`, pruebas de regresión en verde. |
@@ -146,7 +142,7 @@ Reglas para las vulnerabilidades introducidas:
 docs/proyecto-seguridad/
   plan-desarrollo.md            ← este archivo
   plantillas/                   ← plantillas de la profesora + rúbrica (no editar; copiar a consolidado/)
-  consolidado/                  ← matriz de gobernanza, doc de PoCs, matriz de riesgo, reporte de parches
+  consolidado/                  ← SOLO LOCAL (en .gitignore): matriz de gobernanza, doc de PoCs, matriz de riesgo, reporte de parches
   auth/  users/  operations/  audit/
     fase-1-diagnostico.md
     fase-2-pocs.md
@@ -154,6 +150,12 @@ docs/proyecto-seguridad/
     evidencias/                 ← capturas, requests/responses, salidas de tests
 ```
 No subir datos reales de usuarios, claves ni tokens en las evidencias (tapar/redactar).
+
+**Documentos consolidados (G1, G2, G3.1, G3.2) — acuerdo del 2026-10-05:** no se versionan en el repo.
+`docs/proyecto-seguridad/consolidado/` está en `.gitignore`. El responsable arma el documento a partir de
+las secciones de cada módulo (que sí están en el repo), lo comparte con el equipo fuera de GitHub y, cuando
+los 4 dan el visto bueno, se marca como hecho en §6 con la fecha de aprobación. La versión aprobada se
+incluye en el paquete final (G4).
 
 ### 4.4 Archivos compartidos (coordinar con el dueño antes de tocar)
 | Archivo / área | Dueño | Motivo |
@@ -204,7 +206,7 @@ mensajes de error que permiten enumerar usuarios, reflejo de parámetros en pág
 - [x] P1.2 Mapeo de componentes/endpoints contra NIST CSF 2.0.
 - [x] P1.3 Impacto operacional y de negocio (GOVERN/IDENTIFY).
 - [x] P1.4 Línea base de controles PROTECT/DETECT.
-- [ ] P1.5 Entregar `docs/proyecto-seguridad/auth/fase-1-diagnostico.md`.
+- [x] P1.5 Entregar `docs/proyecto-seguridad/auth/fase-1-diagnostico.md`.
 
 **Fase 2**
 - [ ] P2.1 Vector 1 — servidor: inyección (A03) y control de acceso / confianza en JWT (A01).
@@ -307,7 +309,7 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 - [x] A1.2 Mapeo de componentes/endpoints contra NIST CSF 2.0.
 - [x] A1.3 Impacto operacional y de negocio (GOVERN/IDENTIFY).
 - [x] A1.4 Línea base de controles PROTECT/DETECT.
-- [ ] A1.5 Entregar `docs/proyecto-seguridad/operations/fase-1-diagnostico.md`.
+- [x] A1.5 Entregar `docs/proyecto-seguridad/operations/fase-1-diagnostico.md`.
 
 **Fase 2**
 - [ ] A2.1 Vector 1 — servidor: inyección en búsqueda/filtros (A03) e IDOR / cambio de estado sin permiso (A01).
@@ -333,6 +335,7 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 | 2026-09-28 | A1.2 Mapeo NIST CSF 2.0: flujo de datos (ID.AM-03), 40+ controles evaluados por componente, resumen de cobertura | `security/operations/fase1-diagnostico` | Hecho; DETECT sin cobertura, PR.AA desigual (commit `c52ab13`) |
 | 2026-09-28 | A1.3 Impacto: contexto GV.OC, apetito de riesgo, BIA por proceso, escala I×P y 11 escenarios de riesgo inherente | `security/operations/fase1-diagnostico` | Hecho; 4 Altos (R01–R04), 6 Medios, 1 Bajo (commit `a7b2c68`) |
 | 2026-09-28 | A1.4 Línea base: 16 controles (13 PROTECT, 3 DETECT) con estado, brecha, tarea A3.x y coordinación; 7 filas listas para G1 | `security/operations/fase1-diagnostico` | Hecho; 2 cumplen, 5 parciales, 9 no cumplen / por verificar |
+| 2026-10-05 | G1 Matriz General de Gobernanza: consolidación de los 4 diagnósticos sobre la plantilla (27 filas, riesgo AUTH-R01 = US-R01 unido), hoja de resumen y criterios, versión `.md` para revisión; corrección del tablero duplicado | `docs/g1-matriz-gobernanza` | Hecho; 3 Críticos, 12 Altos, 12 Medios; aprobada por los 4 el 2026-10-05 y compartida fuera del repo |
 
 ---
 
@@ -360,7 +363,7 @@ de hash) y cobertura de eventos de los otros módulos.
 - [x] F1.2 Mapeo de componentes/endpoints contra NIST CSF 2.0.
 - [x] F1.3 Impacto operacional y de negocio (GOVERN/IDENTIFY).
 - [x] F1.4 Línea base de controles PROTECT/DETECT.
-- [ ] F1.5 Entregar `docs/proyecto-seguridad/audit/fase-1-diagnostico.md`.
+- [x] F1.5 Entregar `docs/proyecto-seguridad/audit/fase-1-diagnostico.md`.
 
 **Fase 2**
 - [ ] F2.1 Vector 1 — servidor: inyección en filtros del visor (A03) y acceso/alteración de logs sin permiso (A01).
@@ -382,6 +385,7 @@ de hash) y cobertura de eventos de los otros módulos.
 |---|---|---|---|
 | 2026-09-23 | Scaffold del módulo de auditoría (tabla, servicio, UI, IP/UA en login) | `feature/audit-log-module-scaffold`, PR #1 | Mergeado a `develop` |
 | 2026-10-02 | F1.1–F1.4: `docs/proyecto-seguridad/audit/fase-1-diagnostico.md` sobre `257db31` | `security/audit/fase1-diagnostico` | 7 activos de datos, 15 de software, 15 observaciones, 12 escenarios de riesgo (2 Críticos, 3 Altos) y 19 controles de línea base. Los 3 vectores del enunciado tienen hallazgo real. Pendiente F1.5 (PR) |
+| 2026-10-05 | F1.5 Entrega de la Fase 1 (revisado y mergeado por Aarón) | `security/audit/fase1-diagnostico`, PR #7 (merge `bc917f3`) | Mergeado a `develop`; Fase 1 cerrada |
 
 ---
 
@@ -391,7 +395,7 @@ de hash) y cobertura de eventos de los otros módulos.
 |---|---|---|---|---|
 | G0.1 | Tomar decisión §4.1 | Todos | — | [x] 2026-09-28 |
 | G0.2 | Guardar plantillas de la profesora en `plantillas/` | Aarón | — | [x] 2026-09-28 |
-| G1 | Matriz General de Gobernanza del Sistema | Aarón | P1.5, J1.5, A1.5, F1.5 | [ ] |
+| G1 | Matriz General de Gobernanza del Sistema | Aarón | P1.5, J1.5, A1.5, F1.5 | [x] 2026-10-05 — 27 filas (3 Críticos, 12 Altos, 12 Medios); aprobada por los 4; fuera del repo (§4.3) |
 | G2 | Documento de PoCs estandarizado | Fabian | P2.4, J2.4, A2.4, F2.4 | [ ] |
 | G3.1 | Matriz de Riesgos NIST CSF actualizada (riesgo residual) | Paula | P3.5, J3.5, A3.5, F3.5 | [ ] |
 | G3.2 | Reporte Técnico de Parches | Joseph | P3.6, J3.6, A3.6, F3.6 | [ ] |
