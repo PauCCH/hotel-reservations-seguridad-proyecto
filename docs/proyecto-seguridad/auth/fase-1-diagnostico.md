@@ -442,18 +442,47 @@ Esta coordinación no bloquea la Fase 1: los acuerdos se cierran antes de la Fas
 
 ## 7. Filas para la Matriz General de Gobernanza (G1)
 
-Formato de `plantillas/matriz-general-gobernanza.xlsx`, listo para consolidar. La primera fila es el
-**mismo riesgo** que la primera fila de Usuarios y se consolida en una sola.
+**Revisión 2026-10-06 (propuesta por Aarón como responsable de G1, por retroalimentación de la
+profesora — a confirmar por Paula):** la versión anterior solo tenía filas PROTECT/DETECT y algunas
+mezclaban dos funciones o varios controles no relacionados en una sola celda. Esta versión toma cada
+control directo de §5.1/§5.2 (AUTH-LB01 a LB18), con una función por fila y un control verificable por
+fila. Se agregó una fila GOVERN (GV.RR-02, responsabilidades de configuración de Auth no asignadas,
+§4.2) y una IDENTIFY (ID.AM-08, código de servidor sin uso con secretos en los logs, AUTH-LB12). La fila
+de cookies/CSP se separó de la de `getUser()`/payload del cliente porque son controles distintos
+(LB09+LB10 vs. LB07). La primera fila es el **mismo riesgo** que la primera fila de Usuarios y se
+consolida en una sola.
+
+Formato de `plantillas/matriz-general-gobernanza.xlsx`, listo para consolidar:
 
 | Módulo y responsable | Activo crítico | Función NIST CSF | Categoría / subcategoría NIST CSF | Control de seguridad requerido (línea base) | Nivel de riesgo inherente |
 |---|---|---|---|---|---|
-| Módulo 1: Autenticación (Paula) | Rol inicial de cada cuenta (`auth.users`, `user_roles`, trigger `handle_new_user`) — compartido con Usuarios | PROTECT (PR) | PR.AA-05: Permisos gestionados con menor privilegio; PR.AA-04: Aserciones de identidad protegidas y verificadas | Asignar el rol solo desde datos que fija el servidor e ignorar `user_metadata` en el trigger | Crítico (provisional) |
-| Módulo 1: Autenticación (Paula) | Redirecciones posteriores al login (`callbackUrl` en `/auth/login` y `/auth/callback`, `emailRedirectTo`) | PROTECT (PR) | PR.DS-10: Integridad de datos en uso | Aceptar solo rutas internas relativas y construir los enlaces de correo con la URL configurada, no con `Origin` | Alto |
-| Módulo 1: Autenticación (Paula) | Credenciales de clientes y personal (`auth.users`), endpoints de login del portal, del panel y de la API de Supabase | PROTECT (PR) | PR.AA-01: Identidades y credenciales gestionadas; PR.AA-03: Usuarios autenticados | Política de contraseñas en el proveedor, captcha, MFA TOTP para personal y límite de intentos por cuenta | Alto |
-| Módulo 1: Autenticación (Paula) | Trazabilidad de eventos de autenticación (`audit_logs`) | DETECT (DE) | DE.CM-03: Monitoreo de actividad del personal; DE.AE-02: Análisis de eventos adversos; PR.PS-04: Generación de registros | Registrar todos los eventos de auth con campos saneados e IP confiable, y detectar intentos fallidos repetidos | Alto |
-| Módulo 1: Autenticación (Paula) | Activación de cuentas de administrador (`activateAdminAction`, `completeAdminActivation`, `pending_invitations`) | PROTECT (PR) | PR.AA-01: Identidades gestionadas durante su ciclo de vida; ID.AM-08: Ciclo de vida de sistemas y datos | Exigir una invitación pendiente, vigente y del mismo usuario antes de activar; impedir que una cuenta desactivada se reactive sola | Medio |
-| Módulo 1: Autenticación (Paula) | Sesión del usuario (cookies `sb-*-auth-token`, hidratación SSR, cabeceras HTTP) | PROTECT (PR) | PR.DS-02: Protección de datos en tránsito; PR.PS-01: Gestión de configuración; PR.AA-04: Aserciones verificadas | Cookies `Secure`/`SameSite` (y `HttpOnly` si es viable), CSP y cabeceras de seguridad, `getUser()` en el servidor y sin tokens en el payload del cliente | Medio |
-| Módulo 1: Autenticación (Paula) | Claims del JWT usados en políticas RLS (`auth.jwt()`, trigger `sync_role_to_jwt`) | PROTECT (PR) | PR.AA-04: Aserciones de identidad protegidas y verificadas | Autorizar con funciones que leen `user_roles`, nunca con claims editables o con el rol de Postgres | Medio |
+| Módulo 1: Autenticación (Paula) | Rol inicial de cada cuenta (`auth.users`, `user_roles`, trigger `handle_new_user`) — compartido con Usuarios | PROTECT (PR) | PR.AA-05: Permisos gestionados con menor privilegio | Asignar el rol solo desde datos que fija el servidor (`handle_new_user` ignora `raw_user_meta_data ->> 'role'`) e ignorar `user_metadata` en toda la cadena de invitación/activación (AUTH-LB01) | Crítico (provisional) |
+| Módulo 1: Autenticación (Paula) | Activación de cuentas de administrador (`activateAdminAction`, `completeAdminActivation`, `pending_invitations`) | PROTECT (PR) | PR.AA-01: Identidades gestionadas durante su ciclo de vida | Exigir una invitación `pending`, vigente y del mismo usuario antes de activar; una cuenta desactivada no se reactiva por esta vía (AUTH-LB02) | Medio |
+| Módulo 1: Autenticación (Paula) | Redirecciones posteriores al login (`callbackUrl` en `/auth/login` y `/auth/callback`, `emailRedirectTo`) | PROTECT (PR) | PR.DS-10: Integridad de datos en uso | Aceptar `callbackUrl` solo si es una ruta interna relativa; construir `emailRedirectTo` con `ENV.APP_URL`, no con la cabecera `Origin` (AUTH-LB03) | Alto |
+| Módulo 1: Autenticación (Paula) | Credenciales de clientes y personal (`auth.users`), login del portal, del panel y de la API directa de Supabase | PROTECT (PR) | PR.AA-01: Identidades y credenciales gestionadas | `minimum_password_length ≥ 8` con requisitos de complejidad en el proveedor; captcha (Turnstile/hCaptcha) y MFA TOTP para personal, ambos nativos de Supabase Auth; límite de intentos fallidos por cuenta (AUTH-LB04 + LB05) | Alto |
+| Módulo 1: Autenticación (Paula) | Página `/auth/error` (parámetros `error`, `error_description`) | PROTECT (PR) | PR.DS-10: Integridad de datos en uso | Mostrar solo textos traducidos de códigos de error conocidos; no renderizar `error_description` de la query (AUTH-LB11) | Medio |
+| Módulo 1: Autenticación (Paula) | Cookies de sesión y cabeceras de seguridad de las 3 apps | PROTECT (PR) | PR.PS-01: Gestión de configuración | Cookies con `Secure` y `SameSite=Lax` explícitos; CSP con nonce, `frame-ancestors 'none'`, HSTS, `X-Content-Type-Options`, `Referrer-Policy` y `Permissions-Policy` en `next.config.ts` de las 3 apps (AUTH-LB09 + LB10) | Medio |
+| Módulo 1: Autenticación (Paula) | Hidratación de sesión en SSR (`getInitialAuthStatus`, `getAuthContextAction`) | PROTECT (PR) | PR.AA-04: Aserciones de identidad protegidas y verificadas | Usar `getUser()` en vez de `getSession()`; al navegador solo llegan `user` y `profile`, nunca la `Session` con los tokens (AUTH-LB07) | Medio |
+| Módulo 1: Autenticación (Paula) | Claims del JWT usados en políticas RLS (`auth.jwt()`, trigger `sync_role_to_jwt`) | PROTECT (PR) | PR.AA-04: Aserciones de identidad protegidas y verificadas | Autorizar con funciones que leen `user_roles` (`is_admin_or_owner()`, `has_permission()`), nunca con `auth.jwt() ->> 'role'` ni `user_metadata`; eliminar el trigger huérfano `sync_role_to_jwt` (AUTH-LB13) | Medio |
+| Módulo 1: Autenticación (Paula) | Trazabilidad de eventos de autenticación (`audit_logs`) | DETECT (DE) | DE.CM-03: Monitoreo de actividad del personal | Registrar los eventos de login, registro, OAuth, activación y logout de las 2 apps, con campos saneados e IP de origen confiable, y un evento `auth.bruteforce.suspected` cuando se supera el umbral de intentos fallidos (AUTH-LB16 + LB17 + LB18) | Alto |
+| Módulo 1: Autenticación (Paula) | Responsabilidades sobre la configuración de Supabase Auth (política de contraseñas, lista de redirecciones permitidas, SMTP, MFA) | GOVERN (GV) | GV.RR-02: Roles, responsabilidades y autoridades establecidos | Documentar en el repo quién es responsable de cada parámetro de la configuración de Auth y revisarlo en cada fase (§4.2: hoy no está asignado ni documentado) | Medio |
+| Módulo 1: Autenticación (Paula) | Código de servidor sin uso con secretos en los logs (`packages/core/src/auth/server/*`) | IDENTIFY (ID) | ID.AM-08: Sistemas y datos gestionados durante su ciclo de vida | Eliminar o dar de baja las funciones de servidor sin uso (`loginAction`, `signOutAction`, `refreshSession`, `getServerAuthContext` de core) y quitar los `console.log` con tokens o emails que arrastran (AUTH-LB12) | Bajo |
+
+### 7.1 Trazabilidad fila → PoC → parche
+
+| Fila (activo) | PoC | Estado |
+|---|---|---|
+| Rol inicial de cada cuenta | PoC conjunta con Usuarios (vector 1) | Planificada (P2.1 / J2.1) |
+| Activación de administradores | AUTH-POC-2 (por crear) | Planificada (vector 1, prioridad 2) |
+| Redirecciones (`callbackUrl`, `Origin`) | AUTH-POC-3 (por crear) | Planificada (vector 3, prioridad 3) |
+| Política de contraseñas / fuerza bruta | — | No priorizada para Fase 2; control de línea base para la Fase 3 igualmente |
+| `/auth/error` | AUTH-POC-4 (por crear) | Planificada (vector 2, prioridad 4; probablemente vulnerabilidad introducida, O-04) |
+| Cookies y CSP | — (defensa en profundidad del vector 2, misma PoC que `/auth/error`) | Planificada junto con AUTH-POC-4 |
+| Hidratación SSR (`getUser()`) | — (verificación de código, sin PoC de ataque dedicada) | N/A |
+| Claims del JWT en RLS | Coordinar con Aarón (OP-R02); sin PoC propia en este módulo todavía | Por definir |
+| Trazabilidad de autenticación | AUTH-POC-5 (por crear) | Planificada (vector 3, prioridad 5; coordinar con Fabian) |
+| Responsabilidades de configuración de Auth | — (control de gobernanza; se verifica con el documento, no con una PoC) | N/A |
+| Código sin uso con secretos en logs | — (hallazgo de inventario, riesgo latente AUTH-R11; se verifica revisando el diff) | N/A |
 
 ---
 

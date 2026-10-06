@@ -99,7 +99,7 @@ de la entrega real: **Sprint 1 — Fase 1** (29 sep–5 oct), **Sprint 2 — Fas
 |---|---|---|
 | H0 — Arranque | 2026-09-28 | ~~Decisión §4.1 tomada~~ (hecho), plantillas acordadas, tablero Jira armado, cada quien leyó su sección. ✅ |
 | H1 — Fase 1 individual (Sprint 1) | 2026-10-05 | Cada módulo tiene su archivo `fase-1-diagnostico.md` completo. |
-| H1b — Matriz General de Gobernanza | 2026-10-06 | Documento consolidado revisado por los 4. ⚠️ En corrección: la profesora pidió incluir GOVERN/IDENTIFY/DETECT (no solo PROTECT) y que la columna E sea congruente con las PoC reales. |
+| H1b — Matriz General de Gobernanza | 2026-10-06 | Documento consolidado revisado por los 4. ⚠️ v3 lista (los 4 módulos con GOVERN/IDENTIFY/PROTECT/DETECT y columna E congruente con las PoC); pendiente de que Paula, Joseph y Fabian confirmen sus filas antes de darla por aprobada de nuevo. |
 | H2 — Fase 2 individual (Sprint 2) | 2026-10-12 | Cada módulo con PoC de los 3 vectores + evidencias reproducibles. |
 | H2b — Documento de PoCs | 2026-10-13 | Documento estandarizado consolidado. |
 | H3 — Parches integrados (Sprint 3) | 2026-10-21 | PRs de cada módulo aprobados y mergeados a `develop`, pruebas de regresión en verde. |
@@ -337,6 +337,7 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 | 2026-09-28 | A1.4 Línea base: 16 controles (13 PROTECT, 3 DETECT) con estado, brecha, tarea A3.x y coordinación; 7 filas listas para G1 | `security/operations/fase1-diagnostico` | Hecho; 2 cumplen, 5 parciales, 9 no cumplen / por verificar |
 | 2026-10-05 | G1 Matriz General de Gobernanza: consolidación de los 4 diagnósticos sobre la plantilla (27 filas, riesgo AUTH-R01 = US-R01 unido), hoja de resumen y criterios, versión `.md` para revisión; corrección del tablero duplicado | `docs/g1-matriz-gobernanza` | Hecho; 3 Críticos, 12 Altos, 12 Medios; aprobada por los 4 el 2026-10-05 y compartida fuera del repo |
 | 2026-10-06 | Retroalimentación de la profesora sobre G1 v1: faltan 3 funciones NIST (solo había PROTECT/algo de DETECT) y los controles de la columna E deben ser implementables y congruentes con las PoC reales. Corrección en `operations/fase-1-diagnostico.md` §7: 8 filas (antes 7), con GOVERN (firma del riesgo residual en G3.1), IDENTIFY (versionar el bucket de Storage), y los 6 controles PROTECT/DETECT reescritos uno-a-uno contra OP-POC-1, OP-POC-2 (hechas) y OP-POC-3 a OP-POC-6 (planificadas en A2.2/A2.3, alcance ya definido en §7.1). Se quitaron 2 filas sin PoC posible (RLS de tarifas, PII). Matriz consolidada v2 regenerada en `consolidado/` (fuera del repo); v1 conservada como `matriz-general-gobernanza.v1-2026-10-05.xlsx` para comparar |
+| 2026-10-06 | Corrección completa de G1 (v3): aplicada la misma rigurosidad de Operaciones a Autenticación, Usuarios y Auditoría, tomando cada control directo de la línea base de controles (§5/§6) de cada diagnóstico en vez de inventar contenido nuevo. Resultado: 37 filas (antes 27), 0 filas con función mezclada (antes 7), las 4 funciones NIST presentes en los 4 módulos (antes 0 GOVERN propio salvo 1 mezclada, 0 IDENTIFY). Se agregó §7.1/§8.1 "Trazabilidad fila → PoC" en los 4 diagnósticos. Matriz v3 en `consolidado/matriz-general-gobernanza.xlsx`; v1 y v2 conservadas (`.v1-2026-10-05`, `.v2-2026-10-06-solo-operaciones`) para comparar. Las ediciones de auth/users/audit son una propuesta de Aarón como responsable de G1: faltan confirmar con Paula, Joseph y Fabian antes de dar la matriz por aprobada |
 
 ---
 
@@ -396,7 +397,7 @@ de hash) y cobertura de eventos de los otros módulos.
 |---|---|---|---|---|
 | G0.1 | Tomar decisión §4.1 | Todos | — | [x] 2026-09-28 |
 | G0.2 | Guardar plantillas de la profesora en `plantillas/` | Aarón | — | [x] 2026-09-28 |
-| G1 | Matriz General de Gobernanza del Sistema | Aarón | P1.5, J1.5, A1.5, F1.5 | [ ] En corrección (retroalimentación de la profesora, 2026-10-06): v1 (27 filas, aprobada 2026-10-05) solo tenía PROTECT/DETECT y algunos controles no eran implementables. v2: Operaciones corregido (8 filas, GOVERN/IDENTIFY/PROTECT/DETECT, cada fila PROTECT/DETECT con PoC propia); falta la misma corrección en Autenticación, Usuarios y Auditoría |
+| G1 | Matriz General de Gobernanza del Sistema | Aarón | P1.5, J1.5, A1.5, F1.5 | [ ] v3 lista (2026-10-06): 37 filas, los 4 módulos con GOVERN/IDENTIFY/PROTECT/DETECT (una función por fila) y columna E congruente con una PoC hecha o planificada (ver §7.1/§8.1 de cada diagnóstico). Las filas de auth/users/audit son propuesta de Aarón; pendiente de que cada dueño las confirme o ajuste antes del PR |
 | G2 | Documento de PoCs estandarizado | Fabian | P2.4, J2.4, A2.4, F2.4 | [ ] |
 | G3.1 | Matriz de Riesgos NIST CSF actualizada (riesgo residual) | Paula | P3.5, J3.5, A3.5, F3.5 | [ ] |
 | G3.2 | Reporte Técnico de Parches | Joseph | P3.6, J3.6, A3.6, F3.6 | [ ] |

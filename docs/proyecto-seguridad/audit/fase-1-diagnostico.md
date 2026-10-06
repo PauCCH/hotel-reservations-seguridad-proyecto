@@ -401,17 +401,41 @@ Es la única tarea de la Fase 3 de este módulo que no puede esperar al Sprint 3
 
 ## 7. Filas para la Matriz General de Gobernanza (G1)
 
+**Revisión 2026-10-06 (propuesta por Aarón como responsable de G1, por retroalimentación de la
+profesora — a confirmar por Fabian):** la versión anterior tenía 3 filas que mezclaban dos funciones
+(PR/DE, PR/RS, PR/GV) en una celda. Esta versión separa cada control por función y los toma de
+§6.1/§6.2 (AU-C01 a AU-C19). Las filas GOVERN e IDENTIFY ya estaban identificadas en §4.2
+(GV.OV-03 y ID.AM-08) pero no habían llegado a esta tabla. Los controles AU-C16/C17/C19 (registro de
+denegados, fallos visibles, ruido del visor) no tienen una PoC propia planificada para la Fase 2 (su
+propio §5.6 los marca como "evidencia de apoyo" dentro de las 3 PoC principales) y se dejaron fuera de
+G1 por el mismo criterio que usó la profesora: no listar lo que no se va a demostrar por separado.
+Siguen en la línea base (§6) como controles de la Fase 3.
+
 Formato de `plantillas/matriz-general-gobernanza.xlsx`, listo para consolidar:
 
 | Módulo y responsable | Activo crítico | Función NIST CSF | Categoría / subcategoría NIST CSF | Control de seguridad requerido (línea base) | Nivel de riesgo inherente |
 |---|---|---|---|---|---|
-| Módulo 4: Logs / Auditoría (Fabián Vargas) | Metadatos del evento (`audit_logs.metadata`) renderizados en el visor (`AuditLogDetailDrawer`, `formatMetadataHtml`) | PROTECT (PR) | PR.DS-10: Integridad de los datos en uso; PR.PS-05: Prevención de la ejecución de software no autorizado | Eliminar `dangerouslySetInnerHTML` y escapar la salida en el visor; CSP en el panel; saneamiento de los campos en la escritura | Crítico |
-| Módulo 4: Logs / Auditoría (Fabián Vargas) | Contexto de red del actor (`ip_address`, `user_agent`) y su origen (`getAuditRequestContext`) | PROTECT (PR) / DETECT (DE) | PR.DS-10: Integridad de los datos en uso; DE.AE-03: Correlación de información de eventos | Aceptar `x-forwarded-for` solo desde proxies de confianza documentados; normalizar y acotar todo campo de texto antes de insertar | Crítico |
-| Módulo 4: Logs / Auditoría (Fabián Vargas) | Registro de auditoría (`audit_logs`) como evidencia: integridad del histórico | PROTECT (PR) / RESPOND (RS) | PR.DS-01: Integridad de los datos en reposo; RS.AN-03: Análisis que establece qué ocurrió | Trigger append-only que bloquee UPDATE/DELETE, hash encadenado por fila y procedimiento de verificación de la cadena | Alto |
-| Módulo 4: Logs / Auditoría (Fabián Vargas) | Lectura del registro (`getAuditLogs`) y permiso `audit:view` | PROTECT (PR) | PR.AA-05: Permisos gestionados con menor privilegio; PR.AA-03: Autenticación de usuarios | Exigir `requirePermission(audit:view)` y consultar con el cliente de sesión para que la RLS se ejerza; middleware del panel restringido por rol | Alto |
-| Módulo 4: Logs / Auditoría (Fabián Vargas) | Filtros del visor (`search`, `action`, `from`, `to`, `pageSize`) | PROTECT (PR) | PR.DS-10: Integridad de los datos en uso; PR.PS-06: Prácticas de desarrollo seguro | Filtros parametrizados por columna (sin interpolar en `.or()`), validación de esquema en el servidor, `pageSize` acotado y errores genéricos | Alto |
-| Módulo 4: Logs / Auditoría (Fabián Vargas) | Cobertura de eventos del sistema (`AUDIT_ACTIONS`) y API de auditoría para los demás módulos | DETECT (DE) | DE.CM-03: Monitoreo de la actividad del personal; DE.CM-09: Monitoreo de software y datos; PR.PS-04: Generación de registros | Ampliar el catálogo de acciones a los cuatro módulos, publicar la guía de uso de `logAuditEvent` y registrar también los accesos denegados | Medio |
-| Módulo 4: Logs / Auditoría (Fabián Vargas) | PII acumulada en el registro (`actor_email`, `ip_address`, `metadata.email`) | PROTECT (PR) / GOVERN (GV) | PR.DS-01: Protección de datos en reposo; GV.OC-03: Requisitos legales (Ley 8968) | Política de retención con plazo definido y purga automatizada; minimización de la PII registrada en intentos fallidos | Medio |
+| Módulo 4: Logs / Auditoría (Fabián Vargas) | Metadatos del evento renderizados en el visor (`AuditLogDetailDrawer`, `formatMetadataHtml`) | PROTECT (PR) | PR.PS-05: Prevención de la ejecución de software no autorizado | Eliminar `dangerouslySetInnerHTML` del drawer; renderizar los metadatos como texto (React escapa) o con nodos, nunca con HTML concatenado (AU-C01) | Crítico |
+| Módulo 4: Logs / Auditoría (Fabián Vargas) | Contexto de red del actor (`ip_address`, `user_agent`) y su origen (`getAuditRequestContext`) | PROTECT (PR) | PR.DS-10: Integridad de los datos en uso | Aceptar `x-forwarded-for` solo desde proxies de confianza documentados (si no, marcar la IP como no verificada); normalizar y acotar en longitud todo campo de texto antes de insertar (AU-C04 + AU-C03) | Crítico |
+| Módulo 4: Logs / Auditoría (Fabián Vargas) | Lectura del registro (`getAuditLogs`) y permiso `audit:view` | PROTECT (PR) | PR.AA-05: Permisos gestionados con menor privilegio | `requirePermission(audit:view)` + cliente de **sesión** (no service-role) para que la RLS se ejerza de verdad; middleware del panel restringido por rol y `getUser()` en vez de `getSession()` (AU-C05 + AU-C13) | Alto |
+| Módulo 4: Logs / Auditoría (Fabián Vargas) | Filtros del visor (`search`, `action`, `from`, `to`, `pageSize`) | PROTECT (PR) | PR.DS-10: Integridad de los datos en uso | `search` con `.ilike()` parametrizado (nunca interpolado en `.or()`); `action`/`from`/`to`/`pageSize` validados con esquema en el servidor; mensajes de error genéricos al cliente (AU-C06 + AU-C07) | Alto |
+| Módulo 4: Logs / Auditoría (Fabián Vargas) | Registro de auditoría (`audit_logs`) como evidencia: integridad del histórico | PROTECT (PR) | PR.DS-01: Integridad de los datos en reposo | Trigger `BEFORE UPDATE OR DELETE` que bloquee la escritura (append-only real, también para el service-role), hash encadenado por fila con procedimiento de verificación, y escritura solo mediante una función `SECURITY DEFINER` acotada (AU-C08 + AU-C09 + AU-C10) | Alto |
+| Módulo 4: Logs / Auditoría (Fabián Vargas) | Cobertura de eventos del sistema (`AUDIT_ACTIONS`) y API de auditoría para los demás módulos | DETECT (DE) | DE.CM-03: Monitoreo de la actividad del personal | Ampliar el catálogo de acciones a los cuatro módulos, publicar la guía de uso de `logAuditEvent` (antes de H2) y registrar también los accesos denegados (`PermissionDeniedError`, fallos de validación) (AU-C15 + AU-C16) | Medio |
+| Módulo 4: Logs / Auditoría (Fabián Vargas) | Supervisión de la cobertura de auditoría del equipo | GOVERN (GV) | GV.OV-03: Se evalúa el desempeño de la gestión de riesgos | Revisar en cada fase cuántos de los eventos que los 4 módulos deberían emitir realmente se emiten, contra el catálogo publicado (§4.2: hoy nadie lo mide) | Medio |
+| Módulo 4: Logs / Auditoría (Fabián Vargas) | Ciclo de vida de la evidencia (retención y minimización de PII en `audit_logs`) | IDENTIFY (ID) | ID.AM-08: Sistemas y datos gestionados durante su ciclo de vida | Definir y documentar el plazo de conservación (propuesta: 12 meses), implementar el job de purga, y minimizar la PII que se guarda en `metadata` de intentos fallidos (AU-C11) | Medio |
+
+### 7.1 Trazabilidad fila → PoC → parche
+
+| Fila (activo) | PoC | Estado |
+|---|---|---|
+| Metadatos renderizados en el visor | AU-POC-F2.2 (por crear) | Planificada (vector 2, prioridad 1 — la más grave del módulo) |
+| Contexto de red (IP/user-agent) | AU-POC-F2.3 (por crear) | Planificada (vector 3, prioridad 3) |
+| Lectura del registro / `audit:view` | AU-POC-F2.1a (por crear) | Planificada (vector 1, prioridad 2) |
+| Filtros del visor | AU-POC-F2.1b (por crear) | Planificada (vector 1, prioridad 2) |
+| Integridad del histórico | AU-POC-F2.3 (misma PoC que IP, o una propia si da el tiempo) | Planificada (vector 3, prioridad 3) |
+| Cobertura de eventos / API de auditoría | — (se verifica con la guía publicada antes de H2, no con una PoC de ataque) | N/A |
+| Supervisión de la cobertura (GOVERN) | — (control de gobernanza; se revisa en cada fase, no con una PoC) | N/A |
+| Ciclo de vida de la evidencia (IDENTIFY) | — (se verifica con el job de purga y la política documentada) | N/A |
 
 ---
 

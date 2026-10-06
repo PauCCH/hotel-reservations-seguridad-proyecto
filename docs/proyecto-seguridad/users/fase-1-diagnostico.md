@@ -389,17 +389,45 @@ Esta coordinación no bloquea la Fase 1: los acuerdos se cierran antes de la Fas
 
 ## 8. Filas para la Matriz General de Gobernanza (G1)
 
+**Revisión 2026-10-06 (propuesta por Aarón como responsable de G1, por retroalimentación de la
+profesora — a confirmar por Joseph):** la versión anterior solo tenía PROTECT/DETECT y una fila mezclaba
+GOVERN con PROTECT. Esta versión toma cada control directo de §6.1/§6.2 (US-C01 a US-C16), con una
+función por fila. La fila GOVERN ya estaba señalada en §4.2 (GV.RR-02, modelo de roles) y se separó de
+su mitad PROTECT (que ahora va en la fila de reglas de negocio). Se agregó una fila IDENTIFY desde
+US-S02 (§4.2, ID.AM-08: una invitación puede quedar sin registro si falla el insert). La primera fila es
+el **mismo riesgo** que la primera fila de Autenticación y se consolida en una sola.
+
 Formato de `plantillas/matriz-general-gobernanza.xlsx`, listo para consolidar:
 
 | Módulo y responsable | Activo crítico | Función NIST CSF | Categoría / subcategoría NIST CSF | Control de seguridad requerido (línea base) | Nivel de riesgo inherente |
 |---|---|---|---|---|---|
-| Módulo 2: Gestión de Usuarios (Joseph / Daniel Salas) | Rol inicial de cada cuenta (`auth.users`, `user_roles`, trigger `handle_new_user`) | PROTECT (PR) | PR.AA-05: Permisos gestionados con menor privilegio; PR.AA-04: Aserciones de identidad protegidas y verificadas | Derivar el rol solo de datos que el usuario no puede editar (fijado por el servidor) e ignorar `user_metadata` | Crítico (provisional) |
-| Módulo 2: Gestión de Usuarios (Joseph / Daniel Salas) | Creación de cuentas de administrador (`createAdminAccountAction`, invitaciones) | PROTECT (PR) | PR.AA-05: Control de acceso; PR.DS-10: Integridad de datos en uso | `requirePermission(admins:invite)` en el servidor y validación con esquema (Zod) de nombre y email | Alto |
-| Módulo 2: Gestión de Usuarios (Joseph / Daniel Salas) | Trazabilidad de la gestión de accesos (altas, bajas, cambios de permisos) | DETECT (DE) | DE.CM-03: Monitoreo de actividad del personal; PR.PS-04: Generación de registros | `logAuditEvent` en cada operación (actor, destino, antes/después), registro de denegaciones y trigger de BD para cambios directos | Alto |
-| Módulo 2: Gestión de Usuarios (Joseph / Daniel Salas) | Tablas `profiles`, `user_permissions`, `pending_invitations` y sus políticas RLS | PROTECT (PR) | PR.AA-05: Control de acceso con menor privilegio | RLS con `FOR` explícito y `WITH CHECK`, por permiso y no solo por rol | Medio |
-| Módulo 2: Gestión de Usuarios (Joseph / Daniel Salas) | Permisos finos de administradores (`updateUserPermissions`, `user_permissions`) | GOVERN (GV) / PROTECT (PR) | GV.RR-02: Roles y autoridades establecidos; PR.AA-05: Separación de funciones | Validar el destino, acotar la delegación (solo el owner otorga `permissions:manage`) y actualizar de forma atómica | Medio |
-| Módulo 2: Gestión de Usuarios (Joseph / Daniel Salas) | Ciclo de vida de invitaciones y cuentas (`revokeInvitation`, `toggleAdminStatus`) | PROTECT (PR) | PR.DS-10: Integridad de datos en uso; PR.AA-01: Identidades y credenciales gestionadas | Máquina de estados de invitaciones, restricciones sobre owner y uno mismo, y revocación efectiva de sesión | Medio |
-| Módulo 2: Gestión de Usuarios (Joseph / Daniel Salas) | Listado y permisos de administradores (RPC `get_admins`, `getUserPermissionsService`) | PROTECT (PR) | PR.AA-05: Control de acceso; PR.DS-01: Protección de datos en reposo | `requirePermission` en toda lectura y `REVOKE EXECUTE` en funciones `SECURITY DEFINER` para `anon` y `authenticated` | Medio |
+| Módulo 2: Gestión de Usuarios (Joseph / Daniel Salas) | Rol inicial de cada cuenta (`auth.users`, `user_roles`, trigger `handle_new_user`) | PROTECT (PR) | PR.AA-05: Permisos gestionados con menor privilegio | Derivar el rol solo de datos que el usuario no puede editar (fijado por el servidor) e ignorar `user_metadata` (US-C02) | Crítico (provisional) |
+| Módulo 2: Gestión de Usuarios (Joseph / Daniel Salas) | Lecturas sensibles sin guard (`createAdminAccountAction`, `getUserPermissionsService`, RPC `get_admins`) | PROTECT (PR) | PR.AA-05: Control de acceso | `requirePermission(admins:invite)` en `createAdminAccountAction`, `requirePermission(permissions:manage)` en `getUserPermissionsService`, y `REVOKE EXECUTE` de `get_admins()` para `anon`/`authenticated` (US-C01 + US-C08) | Alto |
+| Módulo 2: Gestión de Usuarios (Joseph / Daniel Salas) | Guard de autorización del servidor (`requirePermission`) | PROTECT (PR) | PR.AA-04: Aserciones de identidad protegidas y verificadas | Obtener el usuario con `getUser()` (validado por Auth) en vez de `getSession()` (US-C09) | Alto |
+| Módulo 2: Gestión de Usuarios (Joseph / Daniel Salas) | Tablas `profiles`, `user_permissions`, `pending_invitations` y sus políticas RLS | PROTECT (PR) | PR.AA-05: Control de acceso con menor privilegio | RLS con `FOR` explícito (no `ALL`) y `WITH CHECK`, evaluada por permiso (`has_permission`) y no solo por rol (US-C03) | Medio |
+| Módulo 2: Gestión de Usuarios (Joseph / Daniel Salas) | Entradas de las server actions del módulo (nombre, email, UUID de destino, permisos, estado) | PROTECT (PR) | PR.DS-10: Integridad de datos en uso | Validación con esquema (Zod) en cada frontera; el estado destino de `toggleAdminStatus` se calcula en el servidor, nunca viene del cliente (US-C04) | Medio |
+| Módulo 2: Gestión de Usuarios (Joseph / Daniel Salas) | Ciclo de vida de invitaciones y cuentas (`revokeInvitation`, `toggleAdminStatus`) | PROTECT (PR) | PR.DS-10: Integridad de datos en uso | Máquina de estados de invitaciones (revocar/reenviar solo desde `pending`); no desactivar al owner ni a uno mismo; solo el owner otorga `permissions:manage` (US-C05 + US-C06) | Medio |
+| Módulo 2: Gestión de Usuarios (Joseph / Daniel Salas) | Revocación de acceso al desactivar una cuenta | PROTECT (PR) | PR.AA-01: Identidades y credenciales gestionadas | Invalidar la sesión con el mecanismo correcto de la API de Supabase (JWT de la sesión o `ban_duration`) y comprobar `is_active` también en `requirePermission` (US-C07) | Medio |
+| Módulo 2: Gestión de Usuarios (Joseph / Daniel Salas) | `full_name` y `email` mostrados en `AdminsTable` y en el visor de auditoría | PROTECT (PR) | PR.DS-10: Integridad de datos en uso | Longitud máxima y caracteres permitidos para `full_name` validados en el servidor (la CSP es control compartido de Paula, no se duplica aquí) (US-C10, mitad propia del módulo) | Bajo |
+| Módulo 2: Gestión de Usuarios (Joseph / Daniel Salas) | Trazabilidad de la gestión de accesos (altas, bajas, cambios de permisos) | DETECT (DE) | DE.CM-03: Monitoreo de actividad del personal | `logAuditEvent` en cada operación (actor, destino, antes/después, campos saneados) y registro de los intentos denegados (US-C14 + US-C15) | Alto |
+| Módulo 2: Gestión de Usuarios (Joseph / Daniel Salas) | Reglas de delegación de permisos (quién puede otorgar qué) | GOVERN (GV) | GV.RR-02: Roles, responsabilidades y autoridades establecidos | Documentar formalmente las reglas de delegación (solo el owner otorga `permissions:manage`) junto al enum de permisos, no solo en el código de `updateUserPermissions` (§4.2) | Medio |
+| Módulo 2: Gestión de Usuarios (Joseph / Daniel Salas) | Registro de invitaciones pendientes ante un fallo de inserción (`pending_invitations`) | IDENTIFY (ID) | ID.AM-08: Sistemas y datos gestionados durante su ciclo de vida | Manejar el fallo del insert en `pending_invitations` de forma consistente (revertir la invitación en Auth o reintentar) en vez de solo `console.error`, para que el activo no quede en un estado huérfano (§4.2, origen US-S02) | Bajo |
+
+### 8.1 Trazabilidad fila → PoC → parche
+
+| Fila (activo) | PoC | Estado |
+|---|---|---|
+| Rol inicial de cada cuenta | PoC conjunta con Autenticación (vector 1) | Planificada (J2.1 / P2.1) |
+| Lecturas sensibles sin guard | US-POC-2 (por crear) | Planificada (vector 1, prioridad 2) |
+| Guard `getUser()` vs `getSession()` | — (verificación de código, junto con US-POC-2) | Planificada |
+| RLS de `profiles`/`user_permissions`/`pending_invitations` | US-POC-3 (por crear) | Planificada (vector 1, prioridad 2; coordinar con Aarón, patrón `has_permission`) |
+| Validación con esquema en las server actions | US-POC-4 (por crear) | Planificada (vector 3, prioridad 3) |
+| Ciclo de vida de invitaciones y cuentas | US-POC-4 (misma PoC, vector 3) | Planificada |
+| Revocación de sesión al desactivar | US-POC-4 (misma PoC, vector 3; coordinar con Paula) | Planificada |
+| `full_name`/`email` en tablas y visor | US-POC-5 (por crear) | Planificada (vector 2, prioridad 4; probablemente vulnerabilidad introducida, O11) |
+| Trazabilidad de la gestión de accesos | US-POC-6 (por crear) | Planificada (vector 3, prioridad 5; coordinar con Fabian) |
+| Reglas de delegación de permisos | — (control de gobernanza; se verifica con el documento, no con una PoC) | N/A |
+| Registro de invitaciones ante fallo de inserción | — (hallazgo de inventario; se verifica simulando el fallo, no es una PoC de ataque) | N/A |
 
 ---
 
