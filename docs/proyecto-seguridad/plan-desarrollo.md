@@ -65,13 +65,13 @@ Cuando la persona se identifique:
 
 ## 2. Tablero de estado (actualizar siempre)
 
-_Última actualización: 2026-10-01_
+_Última actualización: 2026-10-05_
 
 | Integrante | Módulo | Fase actual | Próxima tarea | Rama activa | Bloqueos |
 |---|---|---|---|---|---|
-| Paula | Autenticación | 1 — Diagnóstico | P1.1 en curso (inventario en su rama, sin PR) | `security/auth/fase1-diagnostico` | — |
+| Paula | Autenticación | 2 — Evaluación ofensiva | P2.1 Vector 1 — servidor (A03 + A01/JWT) | — | — |
 | Joseph | Gestión de Usuarios | 2 — Evaluación ofensiva | J2.1 Vector 1 — servidor (A03 + A01) | — | — |
-| Aarón | Operaciones / Transacciones | 2 — Evaluación ofensiva | A2.2 Vector 2 — cliente: XSS stored vía datos del huésped | `security/operations/fase2-pocs` | G1 espera los diagnósticos de Paula y Fabian (vence 2026-10-06) |
+| Aarón | Operaciones / Transacciones | 2 — Evaluación ofensiva | A2.2 Vector 2 — cliente: XSS stored vía datos del huésped | `security/operations/fase2-pocs` | G1 espera el diagnóstico de Fabian (vence 2026-10-06) |
 | Fabian | Logs / Auditoría | 1 — Diagnóstico | F1.1 Inventario de activos del módulo | — | — |
 
 ### Estado global del repo
@@ -196,11 +196,11 @@ mensajes de error que permiten enumerar usuarios, reflejo de parámetros en pág
 **Subcategorías NIST CSF 2.0 sugeridas:** PR.AA-01/02/03/05, PR.DS-02, DE.CM-01/03, ID.AM-07, GV.RM.
 
 **Fase 1**
-- [ ] P1.1 Inventario de activos (datos: credenciales, sesiones, tokens de activación; servicios: Supabase Auth, OAuth, Resend).
-- [ ] P1.2 Mapeo de componentes/endpoints contra NIST CSF 2.0.
-- [ ] P1.3 Impacto operacional y de negocio (GOVERN/IDENTIFY).
-- [ ] P1.4 Línea base de controles PROTECT/DETECT.
-- [ ] P1.5 Entregar `docs/proyecto-seguridad/auth/fase-1-diagnostico.md`.
+- [x] P1.1 Inventario de activos (datos: credenciales, sesiones, tokens de activación; servicios: Supabase Auth, OAuth, Resend).
+- [x] P1.2 Mapeo de componentes/endpoints contra NIST CSF 2.0.
+- [x] P1.3 Impacto operacional y de negocio (GOVERN/IDENTIFY).
+- [x] P1.4 Línea base de controles PROTECT/DETECT.
+- [x] P1.5 Entregar `docs/proyecto-seguridad/auth/fase-1-diagnostico.md`.
 
 **Fase 2**
 - [ ] P2.1 Vector 1 — servidor: inyección (A03) y control de acceso / confianza en JWT (A01).
@@ -220,7 +220,13 @@ mensajes de error que permiten enumerar usuarios, reflejo de parámetros en pág
 **Bitácora**
 | Fecha | Tarea | Rama / commit / PR | Resultado |
 |---|---|---|---|
-| | | | |
+| 2026-09-28 | Rama de trabajo de Fase 1 creada | `security/auth/fase1-diagnostico` | Publicada en `origin` |
+| 2026-09-28 | P1.1 Inventario de activos + 12 observaciones preliminares | `security/auth/fase1-diagnostico`, commit `04ef70e` | Revisado por Paula, hecho |
+| 2026-10-03 | Merge de `develop` en la rama (conflicto en el tablero §2 resuelto) | `security/auth/fase1-diagnostico`, commit `11fa71e` | Hecho |
+| 2026-10-03 | P1.2 Mapeo NIST CSF 2.0: flujo de datos (ID.AM-03), 42 controles evaluados por componente y resumen de cobertura; 3 observaciones nuevas (O-13 a O-15) | `security/auth/fase1-diagnostico`, commit `f6edcab` | Hecho; 14 cumplen, 14 parciales, 10 no cumplen, 4 por verificar; DETECT casi nulo (§3) |
+| 2026-10-03 | P1.3 Impacto: contexto GV.OC, apetito de riesgo, BIA por 5 procesos, misma escala I×P que Operaciones y Usuarios y 12 escenarios de riesgo inherente | `security/auth/fase1-diagnostico`, commit `60b6871` | Hecho; 1 Crítico (provisional, compartido con US-R01), 3 Altos, 5 Medios, 3 Bajos (§4) |
+| 2026-10-03 | P1.4 Línea base: 18 controles (15 PROTECT, 3 DETECT) con estado, brecha, tarea P3.x y coordinación; 7 filas listas para G1 y límites del análisis | `security/auth/fase1-diagnostico` | Hecho; 2 cumplen, 6 parciales, 10 no cumplen (§5–§8) |
+| 2026-10-05 | P1.5 Entrega de la Fase 1 | `security/auth/fase1-diagnostico`, PR #4 (merge `e41b2a2`) | Mergeado a `develop`; Fase 1 cerrada |
 
 ---
 
@@ -385,7 +391,7 @@ de hash) y cobertura de eventos de los otros módulos.
 |---|---|---|---|---|
 | G0.1 | Tomar decisión §4.1 | Todos | — | [x] 2026-09-28 |
 | G0.2 | Guardar plantillas de la profesora en `plantillas/` | Aarón | — | [x] 2026-09-28 |
-| G1 | Matriz General de Gobernanza del Sistema | Aarón | P1.5, J1.5, A1.5, F1.5 | [ ] En curso: J1.5 y A1.5 listos (2/4) |
+| G1 | Matriz General de Gobernanza del Sistema | Aarón | P1.5, J1.5, A1.5, F1.5 | [ ] En curso: P1.5, J1.5 y A1.5 listos (3/4); falta F1.5 |
 | G2 | Documento de PoCs estandarizado | Fabian | P2.4, J2.4, A2.4, F2.4 | [ ] |
 | G3.1 | Matriz de Riesgos NIST CSF actualizada (riesgo residual) | Paula | P3.5, J3.5, A3.5, F3.5 | [ ] |
 | G3.2 | Reporte Técnico de Parches | Joseph | P3.6, J3.6, A3.6, F3.6 | [ ] |
