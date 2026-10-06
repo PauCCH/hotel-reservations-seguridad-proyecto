@@ -351,14 +351,51 @@ residual Medio según la escala del enunciado.
 
 ## 7. Filas para la Matriz General de Gobernanza (G1)
 
+**Revisión 2026-10-06**, por retroalimentación de la profesora sobre la primera versión de G1: (1) la
+matriz solo tenía filas PROTECT/DETECT, faltaban GOVERN e IDENTIFY; (2) cada control de la columna E
+debe ser algo que de verdad se vaya a implementar en la Fase 3, no una aspiración; (3) cada fila con
+función PROTECT o DETECT debe tener una PoC propia que la respalde — la profesora va a revisar que las
+PoC calcen con esa columna.
+
+Cambios frente a la versión anterior:
+- Se agregó una fila **GOVERN** (firma del riesgo residual) y una **IDENTIFY** (versionar el bucket de
+  Storage), que antes no existían.
+- Se **quitó** la fila de "Catálogo y tarifas / políticas RLS": no tiene una PoC propia planificada en
+  `operations` (la causa raíz — `auth.jwt() ->> 'role'` y `sync_role_to_jwt` — depende del módulo de
+  Paula; si ella la toma en el suyo, se referencia desde ahí en vez de duplicarla aquí).
+- Se **quitó** la fila de "PII de huéspedes": su control era "mantener" algo que ya existe, sin ninguna
+  vulnerabilidad que demostrar ni PoC posible.
+- Se **separó** la fila de confirmación de pago en dos controles de una sola función cada uno (antes
+  mezclaba PROTECT y DETECT, y pedía un webhook que no aplica porque la app no crea reservas desde el
+  checkout) y se le quitó el webhook.
+- Cada fila que queda tiene **una sola función NIST** y **un solo control** verificable.
+
 Formato de `plantillas/matriz-general-gobernanza.xlsx`, listo para consolidar:
 
 | Módulo y responsable | Activo crítico | Función NIST CSF | Categoría / subcategoría NIST CSF | Control de seguridad requerido (línea base) | Nivel de riesgo inherente |
 |---|---|---|---|---|---|
-| Módulo 3: Operaciones / Transacciones (Aarón Líos) | Galería de habitaciones (`room_images`, bucket `room-images`), server actions `galleryActions` | PROTECT (PR) | PR.AA-05: Permisos gestionados con menor privilegio; PR.PS-05: Prevención de ejecución no autorizada | `requirePermission(rooms_manage)` en el servidor, middleware del panel restringido por rol y validación de archivos en el servidor (magic bytes, tipo y extensión fijados por el servidor) | Alto |
-| Módulo 3: Operaciones / Transacciones (Aarón Líos) | Catálogo y tarifas (`rooms`, `room_schedules`) y sus políticas RLS | PROTECT (PR) | PR.AA-04: Aserciones de identidad protegidas y verificadas; PR.AA-05: Control de acceso | RLS basado en `user_roles`/permisos (no en claims editables del JWT), incluyendo al owner y con `WITH CHECK` | Alto |
-| Módulo 3: Operaciones / Transacciones (Aarón Líos) | Confirmación de pago (sesión de Stripe, `/reserve/success`, código de confirmación) | PROTECT (PR) / DETECT (DE) | PR.DS-10: Integridad de datos en uso; DE.CM-06: Monitoreo de proveedores externos | Verificar `payment_status` con Stripe antes de confirmar, webhook firmado y gateway mock deshabilitado fuera de desarrollo | Alto |
-| Módulo 3: Operaciones / Transacciones (Aarón Líos) | Operaciones administrativas (estado de reservas, tarifas, modo de reservas, galería) | DETECT (DE) | DE.CM-03: Monitoreo de actividad del personal; PR.PS-04: Generación de registros | Registrar cada operación vía `logAuditEvent` (actor, antes/después, campos saneados) y los intentos denegados | Alto |
-| Módulo 3: Operaciones / Transacciones (Aarón Líos) | Estado de las reservas (`reservations.status`) y modo de reservas (`system_settings`) | PROTECT (PR) | PR.DS-01: Integridad de datos en reposo; PR.PS-01: Gestión de configuración | Máquina de estados aplicada en el servidor y validación con esquema (enum) de `status` y `BookingMode` | Medio |
-| Módulo 3: Operaciones / Transacciones (Aarón Líos) | API pública `POST /api/checkout` | PROTECT (PR) | PR.DS-10: Integridad de datos en uso; PR.IR-01: Protección contra acceso lógico no autorizado | Validación con esquema (UUID, fechas, email), verificación de `Origin` y rate limit por IP | Medio |
-| Módulo 3: Operaciones / Transacciones (Aarón Líos) | PII de huéspedes (`reservations.guest_*`) | PROTECT (PR) | PR.DS-01: Protección de datos en reposo; PR.AA-05: Control de acceso | Mantener RLS deny-all + `requirePermission(reservations_view)` y reducir el uso de service-role | Medio |
+| Módulo 3: Operaciones / Transacciones (Aarón Líos) | Riesgo residual del módulo al cierre de la Fase 3 | GOVERN (GV) | GV.RM-02: Riesgo evaluado y priorizado frente al apetito de riesgo definido | El owner firma y fecha la Matriz de Riesgo Residual (G3.1) para cada riesgo de este módulo que quede en Alto o Crítico tras la Fase 3, antes de la entrega | Alto |
+| Módulo 3: Operaciones / Transacciones (Aarón Líos) | Bucket de Storage `room-images` y sus políticas (hoy configurado a mano, fuera de las migraciones) | IDENTIFY (ID) | ID.AM-08: Sistemas, software, servicios y datos gestionados durante su ciclo de vida | Migración SQL que versiona el bucket (`allowed_mime_types`, `file_size_limit`) y sus políticas de Storage, igual que el resto de tablas del módulo | Medio |
+| Módulo 3: Operaciones / Transacciones (Aarón Líos) | `galleryActions` (`uploadImage`, `deleteImage`, `reorderImages`) | PROTECT (PR) | PR.AA-05: Permisos gestionados con menor privilegio | `requirePermission(rooms_manage)` en las tres Server Actions | Alto |
+| Módulo 3: Operaciones / Transacciones (Aarón Líos) | Endpoint de consulta de reservas (`/api/reservations/lookup`) | PROTECT (PR) | PR.DS-10: Integridad de datos en uso | Reemplazar la concatenación en `.or()` por `.eq()` parametrizado y validar el esquema de entrada en el servidor | Alto |
+| Módulo 3: Operaciones / Transacciones (Aarón Líos) | Imágenes subidas a la galería pública (`uploadImage`, bucket `room-images`) | PROTECT (PR) | PR.PS-05: Prevención de la ejecución de software no autorizado | Validar el tipo real del archivo por *magic bytes* en el servidor antes de subirlo (hoy solo se valida `file.type` en el cliente) | Alto |
+| Módulo 3: Operaciones / Transacciones (Aarón Líos) | Confirmación de pago (`/reserve/success`, sesión de Stripe) | PROTECT (PR) | PR.DS-10: Integridad de datos en uso | Verificar `payment_status` contra la API de Stripe antes de confirmar y deshabilitar el gateway mock fuera de `NODE_ENV=development` | Alto |
+| Módulo 3: Operaciones / Transacciones (Aarón Líos) | Estado de reservas (`reservations.status`) y modo de reservas (`system_settings.booking_confirmation_mode`) | PROTECT (PR) | PR.DS-01: Integridad de datos en reposo | Aplicar `VALID_TRANSITIONS` en `updateReservationStatus` y validar `BookingMode` contra un enum en `updateBookingMode`, ambos en el servidor | Medio |
+| Módulo 3: Operaciones / Transacciones (Aarón Líos) | Operaciones administrativas (estado de reservas, tarifas, modo de reservas, galería) | DETECT (DE) | DE.CM-03: Monitoreo de la actividad del personal | Registrar cada operación vía `logAuditEvent` (actor, antes/después, campos saneados) y registrar también los intentos denegados | Alto |
+
+### 7.1 Trazabilidad fila → PoC → parche
+
+| Fila (activo) | PoC | Estado |
+|---|---|---|
+| Riesgo residual del módulo | — (control de gobernanza; se verifica en G3.1, no con una PoC de código) | N/A |
+| Bucket `room-images` sin versionar | — (hallazgo de inventario; se verifica con la migración, no con una PoC de ataque) | N/A |
+| `galleryActions` sin permisos | **OP-POC-2** | Hecha (A2.1) |
+| `/api/reservations/lookup` | **OP-POC-1** | Hecha (A2.1, vulnerabilidad introducida) |
+| Validación de archivos subidos | OP-POC-3 (por crear) | Planificada (A2.2, vector 2) |
+| Confirmación de pago con `session_id` arbitrario | OP-POC-4 (por crear) | Planificada (A2.3, vector 3) |
+| Transiciones de estado / modo de reservas | OP-POC-5 (por crear) | Planificada (A2.3, vector 3) |
+| Operaciones administrativas sin auditoría | OP-POC-6 (por crear) | Planificada (A2.3, vector 3; coordinar con Fabian para log injection) |
+
+Toda fila PROTECT o DETECT tiene una PoC asociada (hecha o planificada con alcance ya definido). Las
+filas GOVERN e IDENTIFY no llevan PoC de ataque porque no son vulnerabilidades explotables: se verifican
+con el entregable correspondiente (la firma en G3.1, la migración del bucket).
