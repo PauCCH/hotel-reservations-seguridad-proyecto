@@ -43,7 +43,8 @@ código pretende hacer cumplir (lanza el error de permiso correcto, pero nunca
 evalúa la condición).
 
 ### Evidencia
-`evidencias/F2.1-A01-broken-access-control.txt`
+- `evidencias/F2.1-A01-broken-access-control.txt`
+- `evidencias/F2.1-A01-ui-full-access.png` (re-test con navegador real)
 
 ### Commit donde se reprodujo
 Reproducido sobre el estado de `develop` en el commit `f9f8c8b` (branch
@@ -86,7 +87,8 @@ y AUD-POC-3 (sin tope de `pageSize`), permite volcar la tabla completa sin pasar
 por la UI ni necesitar `audit:view`.
 
 ### Evidencia
-`evidencias/F2.1-A03-filter-injection.txt`
+- `evidencias/F2.1-A03-filter-injection.txt`
+- `evidencias/F2.1-A03-baseline-zero-results.png`, `evidencias/F2.1-A03-injection-all-rows.png` (re-test con navegador real)
 
 ### Commit donde se reprodujo
 Igual que AUD-POC-1: `develop @ f9f8c8b`, sin modificaciones.
@@ -145,12 +147,14 @@ Igual que AUD-POC-1: `develop @ f9f8c8b`, sin modificaciones.
 ### Resultado esperado vs. obtenido
 - **Esperado:** el email se guarda/renderiza como texto plano o se rechaza por
   formato inválido antes de persistir.
-- **Obtenido:** el payload se persiste y se devuelve sin escapar; por código
-  (`dangerouslySetInnerHTML` + `formatMetadataHtml` sin sanitizar, documentado así
-  a propósito) se confirma que el drawer lo ejecuta. Confirmación por inspección
-  de código, no por captura de navegador — esta sesión no tenía una herramienta de
-  automatización de navegador conectada; la verificación visual (cambio de
-  `document.title`) queda como paso manual documentado en la evidencia.
+- **Obtenido:** el payload se persiste sin escapar y **ejecuta de verdad** al
+  abrir el drawer. Confirmado con navegador real (Playwright + Chromium): el
+  título de la pestaña cambió a "AUD-POC-4-XSS-v2" (`document.title` vía
+  DevTools Protocol), y la consola registró `HTMLImageElement.onerror`
+  corriendo en el origen de la página. La captura muestra el contraste directo:
+  el campo "Actor" (React, escapado) pinta el payload como texto literal, pero
+  "Metadatos → email" (`dangerouslySetInnerHTML`) muestra el ícono roto de un
+  `<img>` real — prueba de que el navegador creó un elemento DOM de verdad ahí.
 
 ### Impacto
 XSS stored explotable por cualquier persona no autenticada, que se ejecuta en la
@@ -159,7 +163,8 @@ un admin seguiría tras ver un intento de login sospechoso. Sin CSP (`next.confi
 del panel, módulo de Paula) que lo mitigue como segunda capa.
 
 ### Evidencia
-`evidencias/F2.2-A07-stored-xss-metadata.txt`
+- `evidencias/F2.2-A07-stored-xss-metadata.txt`
+- `evidencias/F2.2-xss-executed-drawer.png`
 
 ### Commit donde se reprodujo
 `develop @ f9f8c8b` / branch `security/audit/fase2-pocs`, sin modificaciones de código.
@@ -250,10 +255,10 @@ otro evento, confundiendo cualquier revisión manual o export a texto plano/CSV.
 
 | ID | Vector | OWASP | Clasificación | Estado |
 |---|---|---|---|---|
-| AUD-POC-1 | 1 — servidor | A01 | Real | Confirmado, reproducido |
-| AUD-POC-2 | 1 — servidor | A03 | Real | Confirmado, reproducido |
+| AUD-POC-1 | 1 — servidor | A01 | Real | Confirmado en vivo + navegador real |
+| AUD-POC-2 | 1 — servidor | A03 | Real | Confirmado en vivo + navegador real |
 | AUD-POC-3 | 1 — servidor | A04 (soporte) | Real | Identificado por código |
-| AUD-POC-4 | 2 — cliente | A03 (XSS stored) | Real — **Crítico** (AU-R01) | Confirmado por código + almacenamiento en vivo |
+| AUD-POC-4 | 2 — cliente | A03 (XSS stored) | Real — **Crítico** (AU-R01) | Confirmado en vivo: ejecución real en navegador |
 | AUD-POC-5 | 3 — entrada | A08 (IP spoofing) | Real — **Crítico** (AU-R04) | Confirmado en vivo |
 | AUD-POC-6 | 3 — entrada | A08 (log injection, CWE-117) | Real — **Crítico** (AU-R04) | Confirmado en vivo + capturas de pantalla |
 

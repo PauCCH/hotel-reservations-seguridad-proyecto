@@ -47,3 +47,18 @@ por la UI.
 
 Clasificación: REAL (no introducida). Documentada como O2/O10 en
 fase-1-diagnostico.md.
+
+------------------------------------------------------------------------
+Re-test con navegador real (Playwright + Chromium) — 2026-10-16
+------------------------------------------------------------------------
+Repetido tecleando directamente en el campo de búsqueda real de la UI
+(`AuditLogFilters`), misma sesión sin `audit:view`:
+
+- Control: `zzz_nonexistent_zzz` → "Historial de eventos del sistema: 0",
+  tabla muestra "No se encontraron eventos" (F2.1-A03-baseline-zero-results.png).
+- Inyección: `x%,actor_email.neq.""` → "Historial de eventos del sistema: 30"
+  (todas las filas existentes al momento del re-test), mismo resultado que
+  por API (F2.1-A03-injection-all-rows.png).
+
+Confirma que la inyección es explotable desde la UI pública tal cual la
+usaría cualquier admin, sin necesidad de armar la petición a mano.

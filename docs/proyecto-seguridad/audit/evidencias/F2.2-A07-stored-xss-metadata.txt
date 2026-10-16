@@ -75,27 +75,42 @@ normalmente (filtrando por action=auth.login.failed):
 El payload llega intacto, sin ningún carácter escapado (`<`, `"`, `=`
 literales).
 
-### Paso 3 — ejecución (confirmación por inspección de código, no por
-navegador — esta sesión no tiene una herramienta de automatización de
-navegador conectada)
+### Paso 3 — ejecución confirmada con navegador real (Playwright + Chromium) — 2026-10-16
 
-`row.metadata` (tal cual se ve arriba) se pasa a `formatMetadataHtml`, que
-devuelve el string:
-  `<div class="audit-meta-row"><strong>email</strong><span class="audit-meta-value"><img src=x onerror="document.title=AUD-POC-4-XSS"></span></div>`
-y ese string se inyecta sin más mediante `dangerouslySetInnerHTML` en
-`AuditLogDetailDrawer`. Un `<img>` con `onerror` insertado vía `innerHTML`
-SÍ ejecuta su manejador de evento al fallar la carga de `src=x` (a
-diferencia de un `<script>` inyectado por innerHTML, que el navegador no
-ejecuta) — es el vector estándar para XSS stored a través de
-`dangerouslySetInnerHTML`/`innerHTML`.
+Re-test en vivo, sesión autenticada real de `vargasarayafabian11@gmail.com`
+(sin `audit:view`) en `/admin/audit-log`:
 
-**Para confirmar visualmente:** iniciar sesión en el panel como cualquier
-admin, ir a `/admin/audit-log`, filtrar por `auth.login.failed` y abrir el
-detalle de la fila con id `b722a112-0e26-4b0d-a578-c0f6f079e6c2` (o repetir
-el Paso 1). El título de la pestaña del navegador cambia a
-"AUD-POC-4-XSS", confirmando ejecución en el contexto de la sesión admin
-autenticada (en un ataque real: robo de sesión, acciones con los
-privilegios del admin, pivoteo a otros módulos).
+1. Primer intento con el payload original (`email=<img src=x
+   onerror="document.title=AUD-POC-4-XSS">`, sin comillas internas en el
+   valor del JS): al abrir el drawer, la consola del navegador mostró:
+     `ReferenceError: AUD is not defined`
+     `    at HTMLImageElement.onerror (http://localhost:3002/admin/audit-log:1:16)`
+   Esto YA prueba ejecución real (`HTMLImageElement.onerror` corriendo en
+   el origen de la página) — el error es solo un bug de comillas en el
+   payload de prueba (`document.title=AUD-POC-4-XSS` se evalúa como
+   `AUD - POC - 4 - XSS`, variables indefinidas), no una mitigación de la
+   app.
+2. Payload corregido (`email=<img src=x
+   onerror="document.title='AUD-POC-4-XSS-v2'">`, con comillas internas):
+   al abrir el drawer de esa fila, el título de la pestaña del navegador
+   cambió de "Panel de Administración" a **"AUD-POC-4-XSS-v2"**,
+   confirmado con `document.title` vía DevTools Protocol.
+
+`row.metadata` se pasa a `formatMetadataHtml`, que devuelve el string sin
+escapar:
+  `<div class="audit-meta-row"><strong>email</strong><span class="audit-meta-value"><img src=x onerror="document.title='AUD-POC-4-XSS-v2'"></span></div>`
+inyectado sin más vía `dangerouslySetInnerHTML` en `AuditLogDetailDrawer`.
+Un `<img>` con `onerror` insertado vía `innerHTML` SÍ ejecuta su manejador
+de evento al fallar la carga de `src=x` (a diferencia de un `<script>`
+inyectado por innerHTML, que el navegador no ejecuta) — es el vector
+estándar para XSS stored a través de `dangerouslySetInnerHTML`/`innerHTML`.
+
+Evidencia visual: captura `F2.2-xss-executed-drawer.png` — nótese el
+contraste dentro de la misma captura: el campo "Actor" (renderizado por
+React, `{row.actor_email}`) muestra el payload como texto literal escapado
+("<img src=x onerror=...>"), mientras que "Metadatos → email" (renderizado
+vía `dangerouslySetInnerHTML`) muestra el ícono roto de una imagen real —
+porque el navegador SÍ creó un elemento `<img>` de verdad ahí, no texto.
 
 Impacto: XSS stored, sin autenticación para inyectar (cualquiera en
 internet puede intentar un login con un email malicioso), que se ejecuta

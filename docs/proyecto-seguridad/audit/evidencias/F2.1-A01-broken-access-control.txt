@@ -52,3 +52,19 @@ Causa raíz (código, no infra):
 
 Clasificación: REAL (no introducida). Ya documentada como O1/O13 en
 fase-1-diagnostico.md.
+
+------------------------------------------------------------------------
+Re-test con navegador real (Playwright + Chromium) — 2026-10-16
+------------------------------------------------------------------------
+Repetido con sesión real de browser (no curl): login vía el formulario
+real de `/auth/login` con `vargasarayafabian11@gmail.com` (sin
+`audit:view`), navegación real a `/admin/audit-log`.
+
+Resultado: la página carga sin error (sin redirect a login, sin pantalla
+de permiso denegado), mostrando "Historial de eventos del sistema: 28" —
+el visor completo, igual que por API. Confirma que el hallazgo no depende
+de llamar el server action a mano; el flujo normal de la UI para esta
+cuenta ya expone el log completo.
+
+Evidencia: F2.1-A01-ui-full-access.png (sidebar con "Fabian Ricardo Vargas
+Araya / admin" + tabla completa de 28 eventos).
