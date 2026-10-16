@@ -65,14 +65,14 @@ Cuando la persona se identifique:
 
 ## 2. Tablero de estado (actualizar siempre)
 
-_Última actualización: 2026-10-05_
+_Última actualización: 2026-10-15_
 
 | Integrante | Módulo | Fase actual | Próxima tarea | Rama activa | Bloqueos |
 |---|---|---|---|---|---|
 | Paula | Autenticación | 2 — Evaluación ofensiva | P2.1 Vector 1 — servidor (A03 + A01/JWT) | — | — |
 | Joseph | Gestión de Usuarios | 2 — Evaluación ofensiva | J2.1 Vector 1 — servidor (A03 + A01) | — | — |
 | Aarón | Operaciones / Transacciones | 2 — Evaluación ofensiva | A2.2 Vector 2 — cliente: XSS stored vía datos del huésped | `security/operations/fase2-pocs` | — |
-| Fabian | Logs / Auditoría | 2 — Evaluación ofensiva | F2.1 Vector 1 — servidor (A03 + A01) | — | — |
+| Fabian | Logs / Auditoría | 2 — Evaluación ofensiva | F2.2 Vector 2 — cliente: XSS stored | `security/audit/fase2-pocs` | — |
 
 ### Estado global del repo
 - [x] Monorepo levantable con `.env` de Supabase/Resend (2026-09-28).
@@ -366,7 +366,7 @@ de hash) y cobertura de eventos de los otros módulos.
 - [x] F1.5 Entregar `docs/proyecto-seguridad/audit/fase-1-diagnostico.md`.
 
 **Fase 2**
-- [ ] F2.1 Vector 1 — servidor: inyección en filtros del visor (A03) y acceso/alteración de logs sin permiso (A01).
+- [x] F2.1 Vector 1 — servidor: inyección en filtros del visor (A03) y acceso/alteración de logs sin permiso (A01).
 - [ ] F2.2 Vector 2 — cliente: XSS stored a través de campos del log.
 - [ ] F2.3 Vector 3 — audit poisoning: falsificar origen o contenido de eventos y evadir detección (A08).
 - [ ] F2.4 Entregar `audit/fase-2-pocs.md` + evidencias.
@@ -386,6 +386,7 @@ de hash) y cobertura de eventos de los otros módulos.
 | 2026-09-23 | Scaffold del módulo de auditoría (tabla, servicio, UI, IP/UA en login) | `feature/audit-log-module-scaffold`, PR #1 | Mergeado a `develop` |
 | 2026-10-02 | F1.1–F1.4: `docs/proyecto-seguridad/audit/fase-1-diagnostico.md` sobre `257db31` | `security/audit/fase1-diagnostico` | 7 activos de datos, 15 de software, 15 observaciones, 12 escenarios de riesgo (2 Críticos, 3 Altos) y 19 controles de línea base. Los 3 vectores del enunciado tienen hallazgo real. Pendiente F1.5 (PR) |
 | 2026-10-05 | F1.5 Entrega de la Fase 1 (revisado y mergeado por Aarón) | `security/audit/fase1-diagnostico`, PR #7 (merge `bc917f3`) | Mergeado a `develop`; Fase 1 cerrada |
+| 2026-10-15 | F2.1 Vector 1 (A01 + A03): 2 PoCs reproducidas contra `localhost:3002` sobre `develop@f9f8c8b` — AUD-POC-1 (acceso a `audit_logs` sin permiso `audit:view`, por fallo de `verifyAdminRole` + uso de service-role client) y AUD-POC-2 (inyección en el filtro `search` vía `.or()` sin sanitizar). AUD-POC-3 (pageSize sin tope) documentado como hallazgo de soporte. Sin vulnerabilidad introducida (los 3 hallazgos son reales, de la Fase 1) | `security/audit/fase2-pocs` | `audit/fase-2-pocs.md` + `audit/evidencias/F2.1-*.txt` creados; pendiente commit |
 
 ---
 

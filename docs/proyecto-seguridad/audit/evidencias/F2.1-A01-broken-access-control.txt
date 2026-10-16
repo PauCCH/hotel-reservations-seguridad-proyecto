@@ -1,0 +1,54 @@
+PoC AUD-POC-1 (F2.1 — Vector 1, A01: control de acceso roto)
+================================================================
+
+Entorno: panel-admin local (localhost:3002), build dev, migraciones aplicadas
+hasta 20260922000002_create_audit_logs_table.sql.
+
+Cuenta usada (real de pruebas del equipo, rol admin, SIN permiso audit:view):
+  email: vargasarayafabian11@gmail.com
+  user_id: 0ff0afd4-9f34-4801-9091-ac0f47a53ef5
+
+1) Login (form action de /auth/login, fallback sin JS) — 302 a /admin/dashboard.
+   Cookie de sesión obtenida: sb-vhnblyovgvpamjsqlzix-auth-token=<REDACTED_JWT>
+
+2) Llamada directa al Server Action getAuditLogs, sin pasar por la UI del
+   visor (demuestra que la verificación, si existiera, tendría que vivir en
+   el server action mismo — y no está):
+
+   POST /admin/audit-log HTTP/1.1
+   Host: localhost:3002
+   Cookie: sb-vhnblyovgvpamjsqlzix-auth-token=<REDACTED_JWT>
+   Next-Action: 7f70e31cc888bbc13237e8faa69e5a64927ba28da9
+   Content-Type: text/plain;charset=UTF-8
+   Accept: text/x-component
+
+   [{"page":1,"pageSize":5}]
+
+   Respuesta: HTTP 200
+   1:{"rows":[
+     {"id":"abd6661a-...","actor_email":"vargasarayafabian11@gmail.com","action":"audit.log.viewed", ...},
+     {"id":"b917ca78-...","actor_email":"vargasarayafabian11@gmail.com","action":"audit.log.viewed", ...},
+     {"id":"be4374b4-...","actor_email":"vargasarayafabian11@gmail.com","action":"auth.login.success", ...},
+     {"id":"96b7779b-...","actor_email":"owner@hotel.local","action":"auth.login.failed", ...}
+   ], "total":14, "page":1, "pageSize":5}
+
+Resultado esperado (si el control funcionara): 403 / PermissionDeniedError
+("audit:view" no concedido a esta cuenta).
+
+Resultado obtenido: 200, con el log completo de auditoría, incluyendo
+eventos de OTROS actores (owner@hotel.local).
+
+Causa raíz (código, no infra):
+- apps/panel-admin/src/features/audit-log/services/getAuditLogs.ts:43-44
+  solo llama a verifyAdminRole(session.user.id), que verifica rol
+  (admin/owner) + is_active, pero NUNCA el permiso audit:view, a pesar de
+  que la línea 44 lanza PermissionDeniedError(PERMISSIONS.AUDIT.VIEW) como
+  si sí lo hubiera validado.
+- La consulta corre con createSupabaseServiceClient() (línea 50), que usa
+  la service-role key y por lo tanto IGNORA la política RLS
+  "audit_logs_admin_select" (20260922000002_create_audit_logs_table.sql:20-23),
+  que sí exige is_admin_or_owner() AND has_permission('audit:view'). Esa
+  política nunca se evalúa en este flujo.
+
+Clasificación: REAL (no introducida). Ya documentada como O1/O13 en
+fase-1-diagnostico.md.
