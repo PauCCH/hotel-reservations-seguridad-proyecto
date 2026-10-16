@@ -29,3 +29,4 @@ skills-lock.json
 
 # Security course consolidated deliverables (shared outside the repo)
 docs/proyecto-seguridad/consolidado/
+.playwright-mcp/

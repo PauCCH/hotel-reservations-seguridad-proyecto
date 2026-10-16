@@ -1,0 +1,111 @@
+PoC AUD-POC-5 y AUD-POC-6 (F2.3 — Vector 3, A08: audit poisoning)
+================================================================
+
+Entorno: panel-admin local (localhost:3002), build dev. Mismo punto de
+entrada sin autenticar que AUD-POC-4 (formulario público /auth/login).
+Corresponde exactamente al riesgo AU-R04 (O4 + O5) de
+fase-1-diagnostico.md, ya calificado ahí como Crítico (12).
+
+------------------------------------------------------------------------
+AUD-POC-5 — Falsificación de IP de origen (O4)
+------------------------------------------------------------------------
+
+Código vulnerable:
+  packages/core/src/audit/server/getAuditRequestContext.ts:35-37
+    const forwardedFor = headerList.get("x-forwarded-for");
+    const firstForwarded = forwardedFor?.split(",")[0]?.trim();
+    const ipAddress = firstForwarded || headerList.get("x-real-ip");
+  Sin lista de proxies de confianza (AU-X03 nunca se definió): toma el
+  primer valor de `x-forwarded-for` tal cual, y esa cabecera la pone
+  CUALQUIER cliente HTTP, no un proxy intermedio de confianza.
+
+Paso 1 — inyección (sin sesión):
+  POST /auth/login
+  Header: X-Forwarded-For: 203.0.113.250, NOT-AN-IP-ADDRESS
+  Body:   email=ip-poison-poc@test.local, password=whatever
+
+  (203.0.113.250 es una IP del bloque TEST-NET-3, reservada para
+  documentación — nunca puede ser una IP de cliente real. Se eligió a
+  propósito para demostrar que el valor no se valida como IP en absoluto.)
+
+Paso 2 — confirmación de almacenamiento (sesión admin sin audit:view,
+misma cuenta de AUD-POC-1):
+  getAuditLogs({ search: "poison-poc" }) devuelve:
+  {
+    "actor_email": "ip-poison-poc@test.local",
+    "action": "auth.login.failed",
+    "ip_address": "203.0.113.250",   ← exactamente lo que el atacante fijó
+    "user_agent": "curl/8.22.0",
+    ...
+  }
+
+Resultado esperado: la IP registrada debería ser la de la conexión TCP
+real (o "no verificada" si no hay proxy de confianza documentado).
+Resultado obtenido: la IP registrada es íntegramente la que el atacante
+eligió, sin ninguna validación de formato ni de origen.
+
+Impacto: cualquier correlación forense por IP en este sistema es
+inservible — un atacante puede atribuir sus acciones a cualquier IP
+(incluida la de un tercero, para incriminarlo) con una sola cabecera HTTP,
+sin necesitar cuenta ni sesión.
+
+------------------------------------------------------------------------
+AUD-POC-6 — Inyección de una entrada de log falsificada (O5, CWE-117)
+------------------------------------------------------------------------
+
+Código vulnerable: mismo sumidero que AUD-POC-4 (AU-R01) — el campo
+`email` del formulario de login se guarda tal cual en `metadata.email` /
+`actor_email` sin normalizar (sin quitar `\r`, `\n` ni caracteres de
+control), packages/core/src/audit/server/logAuditEvent.ts:34-43 y origen
+en apps/panel-admin/src/features/auth/services/loginAction.ts:25-31.
+
+Nota metodológica: un CRLF literal en una CABECERA HTTP (p. ej. User-Agent)
+es rechazado por el propio protocolo (probado: el servidor devuelve
+`400 Bad Request` — Node/Next.js ya bloquea la división de peticiones a
+ese nivel). El vector real es un campo del CUERPO del formulario, que sí
+acepta bytes `\r`/`\n` literales sin que HTTP los restrinja.
+
+Paso 1 — inyección (sin sesión), payload en el campo `email` del body:
+  email = "crlf-poison-poc@test.local\r\n[FORGED] 2026-10-16T00:00:00Z action=audit.log.purged actor=owner@hotel.local result=success\r\n"
+
+Paso 2 — confirmación de almacenamiento (misma cuenta admin sin
+audit:view): la fila se recupera con `actor_email` y `metadata.email`
+conteniendo los `\r\n` crudos y el texto fabricado íntegro.
+
+Paso 3 — confirmación visual en la UI real (Playwright + Chromium, sesión
+autenticada como `vargasarayafabian11@gmail.com`):
+  - Captura `F2.3-table-poisoned-rows.png`: en la columna "Actor" de la
+    tabla del visor, el texto fabricado aparece partido en varias líneas
+    dentro de la MISMA celda de la fila `auth.login.failed`, simulando una
+    segunda entrada de log independiente
+    ("[FORGED] ... action=audit.log.purged actor=owner@hotel.local
+    result=success") que un revisor desprevenido podría leer como un
+    evento real atribuido a `owner@hotel.local`.
+  - Captura `F2.3-drawer-poisoned-row.png`: el mismo texto fabricado
+    aparece en el campo "Actor" del drawer de detalle.
+
+Resultado esperado: el campo debería rechazarse por formato de email
+inválido, o al menos normalizarse (sin `\r`/`\n`) antes de insertar.
+Resultado obtenido: se almacena y se muestra tal cual, permitiendo
+fabricar lo que visualmente parece una entrada de log adicional dentro de
+un evento real — el vector de "audit poisoning" que describe el enunciado
+(evadir o confundir la revisión/detección).
+
+Impacto: un atacante no autenticado puede sembrar en el propio registro de
+auditoría texto que simula otro evento (p. ej. atribuyéndole a
+`owner@hotel.local` haber purgado el log), confundiendo cualquier revisión
+manual o automatizada que parsee el campo como texto plano (export a CSV,
+grep de logs, etc.).
+
+------------------------------------------------------------------------
+Clasificación (ambas PoC): REAL. Es exactamente la cadena O4+O5 / riesgo
+AU-R04 de fase-1-diagnostico.md ("Crítico (12)": trivial, anónimo, destruye
+la fidelidad de toda correlación por IP y permite incriminar a un tercero).
+No se introdujo nada.
+
+Commit donde se reprodujo: `develop @ f9f8c8b` / branch
+`security/audit/fase2-pocs`, sin modificaciones de código.
+
+Evidencia:
+  F2.3-table-poisoned-rows.png  (tabla del visor, filtrada por "poison-poc")
+  F2.3-drawer-poisoned-row.png  (detalle del evento con el log falsificado)

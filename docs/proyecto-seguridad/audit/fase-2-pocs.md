@@ -166,6 +166,86 @@ del panel, módulo de Paula) que lo mitigue como segunda capa.
 
 ---
 
+## AUD-POC-5 — Falsificación de la IP de origen vía `X-Forwarded-For`
+
+- **ID:** AUD-POC-5
+- **Vector:** 3 — alteración de entrada
+- **OWASP:** A08:2021 — Software and Data Integrity Failures (audit poisoning)
+- **Subcategoría NIST CSF 2.0:** PR.DS-10 (integridad de datos en uso)
+- **Componente / archivo:línea:** `packages/core/src/audit/server/getAuditRequestContext.ts:35-37`
+- **Origen:** REAL — cadena **O4 / riesgo AU-R04** de `fase-1-diagnostico.md` (Crítico, 12).
+
+### Precondiciones
+Ninguna — el formulario público `/auth/login` es el punto de entrada.
+
+### Pasos reproducibles
+1. `POST /auth/login` sin sesión, con header `X-Forwarded-For: 203.0.113.250, NOT-AN-IP-ADDRESS`
+   (203.0.113.250 es TEST-NET-3, una IP reservada de documentación — nunca puede
+   ser una IP real de cliente, elegida para probar que no hay validación de formato).
+2. Con una sesión admin cualquiera, `getAuditLogs({ search: "poison-poc" })` devuelve
+   la fila con `ip_address: "203.0.113.250"` — exactamente el valor fijado por el atacante.
+3. Detalle completo en `evidencias/F2.3-A08-audit-poisoning.txt`.
+
+### Resultado esperado vs. obtenido
+- **Esperado:** IP de la conexión real, o "no verificada" sin proxy de confianza documentado.
+- **Obtenido:** la IP registrada es 100 % controlada por el atacante, sin validar formato ni origen.
+
+### Impacto
+Cualquier correlación forense por IP queda inutilizada; un atacante puede atribuir sus
+acciones a cualquier IP, incluida la de un tercero, para incriminarlo.
+
+### Evidencia
+`evidencias/F2.3-A08-audit-poisoning.txt`
+
+### Commit donde se reprodujo
+`develop @ f9f8c8b` / branch `security/audit/fase2-pocs`, sin modificaciones.
+
+---
+
+## AUD-POC-6 — Inyección de una entrada de log falsificada (CWE-117)
+
+- **ID:** AUD-POC-6
+- **Vector:** 3 — alteración de entrada
+- **OWASP:** A08:2021 — Software and Data Integrity Failures (audit poisoning / log injection)
+- **Subcategoría NIST CSF 2.0:** PR.DS-10, PR.PS-06
+- **Componente / archivo:línea:** `packages/core/src/audit/server/logAuditEvent.ts:34-43`
+  (origen: `apps/panel-admin/src/features/auth/services/loginAction.ts:25-31`)
+- **Origen:** REAL — cadena **O5 / riesgo AU-R04** de `fase-1-diagnostico.md` (Crítico, 12).
+
+### Precondiciones
+Ninguna para inyectar (formulario público). Cualquier admin para verla en el visor.
+
+### Pasos reproducibles
+1. `POST /auth/login` sin sesión con
+   `email = "crlf-poison-poc@test.local\r\n[FORGED] 2026-10-16T00:00:00Z action=audit.log.purged actor=owner@hotel.local result=success\r\n"`.
+   Nota: un CRLF en una cabecera HTTP es rechazado por el protocolo (probado: `User-Agent`
+   con `\r\n` → `400 Bad Request`); el vector real es un campo del **cuerpo** del formulario,
+   que sí acepta bytes de control literales.
+2. Confirmado vía `getAuditLogs` que `actor_email`/`metadata.email` guardan el `\r\n` crudo.
+3. Confirmado visualmente con sesión real de admin (Playwright + Chromium): el texto
+   fabricado aparece partido en varias líneas dentro de la celda "Actor" de la tabla y en
+   el drawer de detalle, simulando una segunda entrada de log
+   (`action=audit.log.purged actor=owner@hotel.local`) dentro de un evento real.
+
+### Resultado esperado vs. obtenido
+- **Esperado:** rechazo por formato de email inválido, o normalización (sin `\r`/`\n`).
+- **Obtenido:** se almacena y se muestra tal cual — permite fabricar lo que parece una
+  entrada de log adicional, atribuida a otro usuario.
+
+### Impacto
+Un atacante no autenticado siembra en el propio registro de auditoría texto que simula
+otro evento, confundiendo cualquier revisión manual o export a texto plano/CSV.
+
+### Evidencia
+- `evidencias/F2.3-A08-audit-poisoning.txt`
+- `evidencias/F2.3-table-poisoned-rows.png` — tabla del visor, filtrada por "poison-poc"
+- `evidencias/F2.3-drawer-poisoned-row.png` — drawer de detalle con el log falsificado
+
+### Commit donde se reprodujo
+`develop @ f9f8c8b` / branch `security/audit/fase2-pocs`, sin modificaciones.
+
+---
+
 ## Resumen para el documento de PoCs (G2)
 
 | ID | Vector | OWASP | Clasificación | Estado |
@@ -174,5 +254,8 @@ del panel, módulo de Paula) que lo mitigue como segunda capa.
 | AUD-POC-2 | 1 — servidor | A03 | Real | Confirmado, reproducido |
 | AUD-POC-3 | 1 — servidor | A04 (soporte) | Real | Identificado por código |
 | AUD-POC-4 | 2 — cliente | A03 (XSS stored) | Real — **Crítico** (AU-R01) | Confirmado por código + almacenamiento en vivo |
+| AUD-POC-5 | 3 — entrada | A08 (IP spoofing) | Real — **Crítico** (AU-R04) | Confirmado en vivo |
+| AUD-POC-6 | 3 — entrada | A08 (log injection, CWE-117) | Real — **Crítico** (AU-R04) | Confirmado en vivo + capturas de pantalla |
 
-Pendiente: F2.3 (vector 3 — audit poisoning / falsificación de origen).
+Los tres vectores del enunciado (1, 2, 3) tienen PoC real reproducida.
+Pendiente: consolidar para G2 (documento de PoCs estandarizado, responsable: Fabian).
