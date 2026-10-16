@@ -65,14 +65,14 @@ Cuando la persona se identifique:
 
 ## 2. Tablero de estado (actualizar siempre)
 
-_Última actualización: 2026-10-15_
+_Última actualización: 2026-10-16_
 
 | Integrante | Módulo | Fase actual | Próxima tarea | Rama activa | Bloqueos |
 |---|---|---|---|---|---|
 | Paula | Autenticación | 2 — Evaluación ofensiva | P2.1 Vector 1 — servidor (A03 + A01/JWT) | — | — |
 | Joseph | Gestión de Usuarios | 2 — Evaluación ofensiva | J2.1 Vector 1 — servidor (A03 + A01) | — | — |
 | Aarón | Operaciones / Transacciones | 2 — Evaluación ofensiva | A2.2 Vector 2 — cliente: XSS stored vía datos del huésped | `security/operations/fase2-pocs` | — |
-| Fabian | Logs / Auditoría | 2 — Evaluación ofensiva | F2.4 Entregar `audit/fase-2-pocs.md` (consolidación final + PR) | `security/audit/fase2-pocs` | — |
+| Fabian | Logs / Auditoría | 2 — cerrada, pendiente G2 | Esperar G2 (consolidación del doc de PoCs) hasta que Paula/Joseph/Aarón cierren P2.4/J2.4/A2.4; mientras, puede adelantar Fase 3 (F3.1) | `security/audit/fase2-pocs` | G2 depende de los otros 3 módulos |
 
 ### Estado global del repo
 - [x] Monorepo levantable con `.env` de Supabase/Resend (2026-09-28).
@@ -369,7 +369,7 @@ de hash) y cobertura de eventos de los otros módulos.
 - [x] F2.1 Vector 1 — servidor: inyección en filtros del visor (A03) y acceso/alteración de logs sin permiso (A01).
 - [x] F2.2 Vector 2 — cliente: XSS stored a través de campos del log.
 - [x] F2.3 Vector 3 — audit poisoning: falsificar origen o contenido de eventos y evadir detección (A08).
-- [ ] F2.4 Entregar `audit/fase-2-pocs.md` + evidencias.
+- [x] F2.4 Entregar `audit/fase-2-pocs.md` + evidencias.
 
 **Fase 3**
 - [ ] F3.1 Parches del vector 1 (RLS append-only, filtros parametrizados).
@@ -388,7 +388,9 @@ de hash) y cobertura de eventos de los otros módulos.
 | 2026-10-05 | F1.5 Entrega de la Fase 1 (revisado y mergeado por Aarón) | `security/audit/fase1-diagnostico`, PR #7 (merge `bc917f3`) | Mergeado a `develop`; Fase 1 cerrada |
 | 2026-10-15 | F2.1 Vector 1 (A01 + A03): 2 PoCs reproducidas contra `localhost:3002` sobre `develop@f9f8c8b` — AUD-POC-1 (acceso a `audit_logs` sin permiso `audit:view`, por fallo de `verifyAdminRole` + uso de service-role client) y AUD-POC-2 (inyección en el filtro `search` vía `.or()` sin sanitizar). AUD-POC-3 (pageSize sin tope) documentado como hallazgo de soporte. Sin vulnerabilidad introducida (los 3 hallazgos son reales, de la Fase 1) | `security/audit/fase2-pocs`, commit `072778d` | Mergeado en la rama; `audit/fase-2-pocs.md` + evidencias |
 | 2026-10-15 | F2.2 Vector 2 (XSS stored, AUD-POC-4): reproducido en vivo — login anónimo con `email=<img src=x onerror=...>` queda en `metadata.email` sin escapar y se confirma recuperable intacto vía `getAuditLogs` (misma cuenta sin `audit:view` de F2.1). Ejecución confirmada por inspección de código (`formatMetadataHtml` + `dangerouslySetInnerHTML` del drawer, documentado como sin-escape a propósito); no se capturó con navegador por no haber herramienta de automatización conectada en la sesión. Es la cadena O3/AU-R01 ya identificada en Fase 1 como riesgo Crítico (16) | `security/audit/fase2-pocs`, commit `6f7e16d` | Mergeado en la rama; `audit/fase-2-pocs.md` + evidencias |
-| 2026-10-15 | F2.3 Vector 3 (audit poisoning, AUD-POC-5 + AUD-POC-6): reproducido en vivo con MCP de Playwright/Chromium — AUD-POC-5 falsifica `x-forwarded-for` (IP TEST-NET-3, sin validar) y AUD-POC-6 inyecta `\r\n` + texto fabricado (`action=audit.log.purged actor=owner@hotel.local`) vía el campo `email` del login, visible en la tabla y el drawer del visor real (capturas de pantalla). Es la cadena O4+O5/AU-R04 ya identificada en Fase 1 como riesgo Crítico (12). Los 3 vectores del enunciado tienen PoC real | `security/audit/fase2-pocs` | `audit/fase-2-pocs.md` + `audit/evidencias/F2.3-*.txt`/`.png` creados; pendiente commit |
+| 2026-10-15 | F2.3 Vector 3 (audit poisoning, AUD-POC-5 + AUD-POC-6): reproducido en vivo con MCP de Playwright/Chromium — AUD-POC-5 falsifica `x-forwarded-for` (IP TEST-NET-3, sin validar) y AUD-POC-6 inyecta `\r\n` + texto fabricado (`action=audit.log.purged actor=owner@hotel.local`) vía el campo `email` del login, visible en la tabla y el drawer del visor real (capturas de pantalla). Es la cadena O4+O5/AU-R04 ya identificada en Fase 1 como riesgo Crítico (12). Los 3 vectores del enunciado tienen PoC real | `security/audit/fase2-pocs`, commit `dfed1d3` | Hecho; `audit/fase-2-pocs.md` + `audit/evidencias/F2.3-*.txt`/`.png` |
+| 2026-10-16 | Re-verificación F2.1/F2.2 con navegador real (Playwright+Chromium) en vez de solo curl, a pedido de Fabian; confirma ejecución real del XSS (no solo inspección de código) | `security/audit/fase2-pocs`, commit `235ed73` | Hecho |
+| 2026-10-16 | F2.4 Revisión de `audit/fase-2-pocs.md` contra la plantilla §4.5: las 6 PoCs completas (AUD-POC-3 como hallazgo de soporte, sin repro activo por diseño); push de la rama a `origin` y PR contra `develop` | `security/audit/fase2-pocs` | Hecho |
 
 ---
 
