@@ -324,8 +324,8 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 - [x] A3.2 Parches del vector 2 (sanitización de entrada y escape de salida).
 - [x] A3.3 Parches del vector 3 (recalcular totales server-side, validar integridad de la pasarela, anti-CSRF).
 - [ ] A3.4 Auditoría del módulo: registrar creación/cambio de reservas vía API de Fabian.
-- [ ] A3.5 Tests de regresión + riesgo residual por hallazgo.
-- [ ] A3.6 Entregar `operations/fase-3-parches.md`.
+- [x] A3.5 Tests de regresión + riesgo residual por hallazgo.
+- [x] A3.6 Entregar `operations/fase-3-parches.md`.
 - [ ] A3.7 Grabar video (≤ 5 min, solo IDE).
 
 **Bitácora**
@@ -348,6 +348,7 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 | 2026-10-18 | A3.1 Parches del Vector 1: OP-POC-1 → filtro parametrizado `.eq(code).eq(email)` (fin de la inyección/IDOR, test de regresión reescrito: la PoC ya no funciona); OP-POC-2 → `requirePermission(ROOMS.MANAGE)` en `uploadImage`/`deleteImage`/`reorderImages`. Rama de Fase 3 creada **desde** `fase2-pocs` para aplicar los fixes sobre las vulns | `security/operations/fase3-parches`, commit `1f43498` | Hecho; test en verde; type-check limpio para los archivos tocados. Pendiente A3.2 (escape XSS), A3.3 (validación + anti-CSRF), A3.4 (logging saneado, depende de util de Fabian) |
 | 2026-10-18 | A3.2 Parche del Vector 2 (OP-POC-3): `ReservationGuestCard` deja de usar `dangerouslySetInnerHTML` y renderiza `{guest.notes}` como texto (React escapa) → la PoC de XSS stored deja de ejecutarse. Sin test automatizado de componente (el vitest del panel corre en `environment: node`, sin jsdom/RTL; agregarlo tocaría config compartida §4.4): regresión por código + captura en vivo de A2.4. Alineado con F3.2 + CSP de Paula | `security/operations/fase3-parches`, commit `ceda94a` | Hecho; type-check limpio. Pendiente A3.3 (validación + anti-CSRF), A3.4 (logging saneado, bloqueado por util de Fabian) |
 | 2026-10-18 | A3.3 Parches del Vector 3: OP-POC-4 → anti-CSRF en `POST /api/checkout` (rechaza `Origin` distinto al del propio sitio); OP-POC-5 → esquema Zod (`checkoutSchema.ts`: fechas futuras, check-out > check-in, aforo > 0) + validación de capacidad (≤ suma de `room.capacity`) y de disponibilidad (sin solapamiento) en `openGatewaySession`; precio ya era server-side. Test de regresión del esquema (5 casos) en verde | `security/operations/fase3-parches`, commit `e90807b` | Hecho; type-check limpio. Pendiente A3.4 (logging saneado — bloqueado por util de saneo de Fabian), A3.5 (riesgo residual), A3.6 (`fase-3-parches.md`), A3.7 (video) |
+| 2026-10-18 | A3.5 + A3.6: `operations/fase-3-parches.md` (§4.6) con ficha, mapeo OWASP/NIST, diff antes/después, prueba de regresión y riesgo residual por hallazgo (OP-POC-1/2/3 Bajo; OP-POC-4 Medio por falta de token/rate-limit; OP-POC-5 Medio por TOCTOU; OP-POC-6 Alto, sin remediar). A3.4 documentado como stub bloqueado por Fabian | `security/operations/fase3-parches` | Hecho. Fase 3 completa salvo A3.4 (bloqueada) y A3.7 (video). Pendiente push + PR de la rama de parches |
 
 ---
 
