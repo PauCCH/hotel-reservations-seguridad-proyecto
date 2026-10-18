@@ -232,6 +232,7 @@ export type Database = {
           currency: string
           guest_email: string
           guest_name: string
+          guest_notes: string | null
           guest_phone: string
           id: string
           pets: number
@@ -253,6 +254,7 @@ export type Database = {
           currency?: string
           guest_email: string
           guest_name: string
+          guest_notes?: string | null
           guest_phone: string
           id?: string
           pets?: number
@@ -274,6 +276,7 @@ export type Database = {
           currency?: string
           guest_email?: string
           guest_name?: string
+          guest_notes?: string | null
           guest_phone?: string
           id?: string
           pets?: number

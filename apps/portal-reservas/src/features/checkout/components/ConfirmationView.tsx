@@ -23,7 +23,7 @@ import { ReservationSummary } from "./ReservationSummary";
 export function ConfirmationView({ draft }: ConfirmationViewProps) {
   const { t } = useI18n();
   const { values, errors, setField, validate } = useGuestForm();
-  const { isSubmitting, errorKey, submit } = useCheckoutSubmit(draft, values.email, validate);
+  const { isSubmitting, errorKey, submit } = useCheckoutSubmit(draft, values, validate);
 
   return (
     <div className={CHECKOUT_STYLES.page}>

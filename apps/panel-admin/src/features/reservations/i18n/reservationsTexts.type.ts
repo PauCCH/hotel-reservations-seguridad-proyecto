@@ -35,6 +35,7 @@ export type ReservationsTexts = {
     SECTION_PAYMENT: string;
     LABEL_EMAIL: string;
     LABEL_PHONE: string;
+    LABEL_NOTES: string;
     LABEL_CATEGORY: string;
     LABEL_GUESTS_TOTAL: string;
     LABEL_ADULTS: string;

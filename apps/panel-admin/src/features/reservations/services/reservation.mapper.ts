@@ -7,6 +7,7 @@ export type DbReservation = {
   guest_name: string;
   guest_email: string;
   guest_phone: string;
+  guest_notes: string | null;
   check_in: string;
   check_out: string;
   adults: number;
@@ -34,6 +35,7 @@ export function mapToReservation(row: DbReservation): Reservation {
       name: row.guest_name,
       email: row.guest_email,
       phone: row.guest_phone,
+      notes: row.guest_notes ?? "",
       initials: getInitials(row.guest_name),
     },
     room: {

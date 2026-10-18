@@ -23,6 +23,7 @@ import {
 import { computeNights } from "../domain/reservation";
 import { buildStripeCheckoutParams } from "../domain/stripe";
 import type { CheckoutSessionPayload } from "../domain/types";
+import { persistReservation } from "./createReservation.server";
 
 export interface GatewayResult {
   status: number;
@@ -39,6 +40,12 @@ export async function openGatewaySession(payload: CheckoutSessionPayload): Promi
   }
 
   const nights = computeNights(payload.checkIn, payload.checkOut);
+
+  // Persist the booking so it appears in the admin panel (realistic flow that
+  // the demo was missing). See createReservation.server.ts for the OP-POC-3
+  // stored-XSS note on the guest_notes field.
+  await persistReservation(payload, rooms, nights);
+
   const successUrl = `${ENV.APP_URL}${ROUTES.RESERVE_SUCCESS}?${SESSION_ID_PARAM}=${STRIPE_SESSION_PLACEHOLDER}`;
   const cancelUrl = `${ENV.APP_URL}${ROUTES.RESERVE}`;
 

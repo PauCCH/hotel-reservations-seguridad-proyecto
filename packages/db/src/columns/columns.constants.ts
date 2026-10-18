@@ -53,6 +53,7 @@ export const DB_COLUMNS: DBTablesWithColumns = {
     guest_name: "guest_name",
     guest_email: "guest_email",
     guest_phone: "guest_phone",
+    guest_notes: "guest_notes",
     room_id: "room_id",
     check_in: "check_in",
     check_out: "check_out",
