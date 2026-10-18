@@ -71,7 +71,7 @@ _Última actualización: 2026-10-18_
 |---|---|---|---|---|---|
 | Paula | Autenticación | 2 — Evaluación ofensiva | P2.1 Vector 1 — servidor (A03 + A01/JWT) | — | — |
 | Joseph | Gestión de Usuarios | 2 — Evaluación ofensiva | J2.1 Vector 1 — servidor (A03 + A01) | — | — |
-| Aarón | Operaciones / Transacciones | 2 — Evaluación ofensiva | A2.3 Vector 3 — manipulación de parámetros del checkout (precio/fechas) + CSRF (A08) + log injection | `security/operations/fase2-pocs` | — |
+| Aarón | Operaciones / Transacciones | 2 — Evaluación ofensiva | A2.4 Entregar `operations/fase-2-pocs.md` + evidencias (push de la rama + PR contra `develop`) | `security/operations/fase2-pocs` | Evidencias en vivo pendientes de entorno con Supabase conectado |
 | Fabian | Logs / Auditoría | 2 — cerrada, pendiente G2 | Esperar G2 (consolidación del doc de PoCs) hasta que Paula/Joseph/Aarón cierren P2.4/J2.4/A2.4; mientras, puede adelantar Fase 3 (F3.1) | `security/audit/fase2-pocs` | G2 depende de los otros 3 módulos |
 
 ### Estado global del repo
@@ -316,7 +316,7 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 **Fase 2**
 - [x] A2.1 Vector 1 — servidor: inyección en búsqueda/filtros (A03) e IDOR / cambio de estado sin permiso (A01).
 - [x] A2.2 Vector 2 — cliente: XSS stored desde datos del huésped hacia el panel.
-- [ ] A2.3 Vector 3 — manipulación de parámetros del checkout (precio/fechas) y CSRF (A08) + log injection.
+- [x] A2.3 Vector 3 — manipulación de parámetros del checkout (precio/fechas) y CSRF (A08) + log injection.
 - [ ] A2.4 Entregar `operations/fase-2-pocs.md` + evidencias.
 
 **Fase 3**
@@ -343,6 +343,7 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 | 2026-10-05 | G1 Matriz General de Gobernanza: consolidación de los 4 diagnósticos sobre la plantilla (27 filas, riesgo AUTH-R01 = US-R01 unido), hoja de resumen y criterios, versión `.md` para revisión; corrección del tablero duplicado | `docs/g1-matriz-gobernanza` | Hecho; 3 Críticos, 12 Altos, 12 Medios; aprobada por los 4 el 2026-10-05 y compartida fuera del repo |
 | 2026-10-18 | Merge de `develop` en la rama (resuelto conflicto del plan; se recuperó la evidencia de Fase 2 de auditoría que la rama había quedado sin integrar) | `security/operations/fase2-pocs`, merge `f615045` | Hecho; test de regresión de A2.1 en verde tras el merge |
 | 2026-10-18 | A2.2 Vector 2: OP-POC-3 (XSS **stored** vía notas del huésped, vulnerabilidad **introducida**) — campo `guest_notes` nuevo + persistencia de la reserva en el checkout + render sin escapar (`dangerouslySetInnerHTML`) en `ReservationGuestCard` del panel. Entrada anónima (checkout público) que ejecuta en la sesión del admin. Alineado con AUD-POC-4 de Fabian | `security/operations/fase2-pocs`, commit `e1828a4` | Hecho; en `operations/fase-2-pocs.md`; type-check de portal/panel limpio (fallos de `@hotel/db` y galería son preexistentes de `develop`); pendiente captura de pantalla en entorno con Supabase conectado |
+| 2026-10-18 | A2.3 Vector 3 (solo documentación, 3 hallazgos **reales** sin código nuevo): OP-POC-4 (CSRF en `POST /api/checkout`, route handler sin token/Origin; contrasta con la Server Action protegida del panel), OP-POC-5 (manipulación de parámetros: fechas en el pasado / sin control de disponibilidad / aforo arbitrario — **precio NO manipulable**, se recalcula server-side) y OP-POC-6 (log injection: hallazgo negativo, operaciones no registra logs; cross-module con AUD-POC-6, se cierra en A3.4) | `security/operations/fase2-pocs` | Hecho; en `operations/fase-2-pocs.md`. Los 3 vectores del enunciado tienen PoC. Falta A2.4 (evidencias en vivo + PR) |
 
 ---
 

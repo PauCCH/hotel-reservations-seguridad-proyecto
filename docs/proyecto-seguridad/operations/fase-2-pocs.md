@@ -6,7 +6,7 @@
 | Responsable | Aarón Líos Cubillo |
 | Rama | `security/operations/fase2-pocs` |
 | Insumo | `docs/proyecto-seguridad/operations/fase-1-diagnostico.md` (§3 observaciones, §5.5 riesgos) |
-| Estado | A2.1 (Vector 1) + A2.2 (Vector 2) completos — OP-POC-1, OP-POC-2, OP-POC-3 |
+| Estado | A2.1 (V1) + A2.2 (V2) + A2.3 (V3) completos — OP-POC-1 … OP-POC-6 |
 
 ---
 
@@ -294,6 +294,205 @@ bitácora del plan de desarrollo al abrir el PR de Fase 2).
 
 ---
 
+## OP-POC-4 — CSRF en `POST /api/checkout` (reserva forzada cross-site)
+
+| Campo | Valor |
+|---|---|
+| ID | OP-POC-4 |
+| Vector | 3 — alteración de entrada |
+| OWASP | A08:2021 Software and Data Integrity Failures (CSRF / petición falsificada entre sitios) |
+| NIST CSF 2.0 | PR.DS-01, PR.PS-06, DE.CM-09 |
+| Origen del hallazgo | **Real** sobre `develop` (el endpoint existe desde US-DM-06). La persistencia de reservas que agregó OP-POC-3 amplifica el impacto: ahora cada petición forjada crea una fila en `reservations`. |
+| Componente / archivo:línea | `apps/portal-reservas/src/app/api/checkout/route.ts` (handler `POST`, sin token anti-CSRF ni verificación de `Origin`/`Referer`); `apps/portal-reservas/src/middleware.ts:18-35` (solo refresca sesión; no valida origen). |
+
+### Descripción
+
+`POST /api/checkout` es un **Route Handler** de Next, no una Server Action. Las Server Actions de Next 15
+traen verificación de `Origin` contra el host integrada; **los Route Handlers no**. Este handler no exige
+ningún token anti-CSRF, no valida `Origin`/`Referer`, no usa `SameSite` como defensa (no hay cookie de
+sesión involucrada porque el checkout es anónimo) y acepta `Content-Type: application/json` desde cualquier
+origen. En consecuencia, cualquier página web controlada por un atacante puede disparar la creación de
+reservas en el hotel en nombre del visitante.
+
+```ts
+// route.ts — sin ninguna defensa contra peticiones de otro origen
+export async function POST(request: Request) {
+  const payload = (await request.json().catch(() => ({}))) as CheckoutSessionPayload;
+  const result = await openGatewaySession(payload); // -> persistReservation(...)
+  return Response.json(result.body, { status: result.status });
+}
+```
+
+Contraste (mismo repo, patrón correcto): `updateReservationStatusAction`
+(`apps/panel-admin/src/features/reservations/actions/updateStatus.ts`) es `"use server"` y pasa por
+`requirePermission(PERMISSIONS.RESERVATIONS.EDIT)` + la protección de origen de las Server Actions → el
+cambio de estado de una reserva **no** es CSRF-able. La asimetría está en el handler público.
+
+### Precondiciones
+
+- Ninguna sobre la víctima más que visitar una página del atacante. El endpoint es público y anónimo.
+
+### Pasos reproducibles
+
+```html
+<!-- Página del atacante (evil.example). Al cargarla, el navegador de la víctima
+     dispara una reserva en el hotel sin su consentimiento. fetch no-cors basta:
+     no se necesita leer la respuesta, solo provocar el efecto de lado. -->
+<script>
+  fetch("http://localhost:3001/api/checkout", {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      roomIds: ["room-std-01"], checkIn: "2027-01-01", checkOut: "2027-01-05",
+      guests: 2, email: "victima@ejemplo.com", fullName: "Forzado",
+      phone: "0000", specialRequests: ""
+    })
+  });
+</script>
+```
+
+Equivalente por consola/curl (sin cabecera `Origin`, simulando el cross-site):
+
+```bash
+curl -s -X POST http://localhost:3001/api/checkout \
+  -H "Content-Type: application/json" \
+  -d '{"roomIds":["room-std-01"],"checkIn":"2027-01-01","checkOut":"2027-01-05","guests":2,"email":"victima@ejemplo.com","fullName":"Forzado","phone":"0000","specialRequests":""}'
+# → 200 + URL de pago; y una nueva fila en `reservations`.
+```
+
+### Resultado esperado vs. obtenido
+
+| | Esperado (diseño) | Obtenido |
+|---|---|---|
+| Petición `POST` sin `Origin` del propio sitio / sin token | Rechazada (403) | ❌ Aceptada; crea la reserva |
+
+### Impacto
+
+- Creación de reservas forjadas desde cualquier sitio → contaminación de la tabla `reservations` que los
+  admins gestionan, spam/DoS de inventario (bloqueo de habitaciones), y **vector de entrega de OP-POC-3**
+  (plantar el payload de XSS stored desde un contexto totalmente externo, sin pasar por la UI del portal).
+- Corresponde a la ausencia de control de integridad de origen (DE.CM-09 / PR.PS-06).
+
+### Evidencia
+
+- Lectura de código (arriba). Reproducción por HTTP con los comandos anteriores contra
+  `pnpm --filter @hotel/portal-reservas dev`. Misma nota de entorno que OP-POC-1 para la captura en vivo.
+
+### Commit donde se reprodujo
+
+No aplica (hallazgo real sobre `develop`; la fila persistida usa el flujo de OP-POC-3).
+
+---
+
+## OP-POC-5 — Manipulación de parámetros del checkout (fechas / disponibilidad / aforo)
+
+| Campo | Valor |
+|---|---|
+| ID | OP-POC-5 |
+| Vector | 3 — alteración de entrada |
+| OWASP | A08:2021 (integridad de datos) + A04:2021 Insecure Design (falta de validación de lógica de negocio) |
+| NIST CSF 2.0 | PR.DS-01, PR.PS-06, ID.RA-01 |
+| Origen del hallazgo | **Real.** El checkout toma `checkIn`, `checkOut`, `guests` y `roomIds` de la URL (`parseReservationParams`) y los usa sin validarlos contra reglas de negocio. |
+| Componente / archivo:línea | `apps/portal-reservas/src/lib/reservationUrl.ts` (parseo), `apps/portal-reservas/src/features/checkout/services/gateway.server.ts` (solo valida que las habitaciones existan y que haya fechas), `.../services/createReservation.server.ts` (persiste los valores tal cual). |
+
+### Descripción
+
+**El precio NO es manipulable** (control que sí se cumple): las habitaciones y sus precios provienen del
+catálogo del servidor (`findRoomsByIds` sobre `mockRooms`), y tanto los `line_items` de Stripe
+(`buildStripeCheckoutParams`) como el total persistido (`persistReservation`) se **recalculan en el
+servidor** a partir de ese catálogo. El cliente solo envía `roomIds`; cambiar un precio en el request no
+tiene efecto. Esto es la contraparte correcta de OP-POC-1 y se documenta como línea base del vector.
+
+**Lo que sí es manipulable** son los parámetros de reserva, que no tienen validación de negocio:
+
+- **Fechas sin cordura:** `checkIn`/`checkOut` solo se validan por el `CHECK (check_out > check_in)` de la
+  tabla. Se puede reservar en el **pasado** o por rangos arbitrarios.
+- **Sin control de disponibilidad:** no hay verificación de solapamiento → se puede **sobre-reservar** la
+  misma habitación para fechas que ya están ocupadas (doble booking).
+- **Aforo arbitrario:** `guests` llega como entero y se persiste en `adults` sin contrastarlo con la
+  capacidad de la habitación.
+
+### Precondiciones
+
+- Ninguna (checkout público). Combinable con OP-POC-4 para hacerlo cross-site.
+
+### Pasos reproducibles
+
+```bash
+# Reserva en el pasado y con aforo imposible para una habitación estándar.
+curl -s -X POST http://localhost:3001/api/checkout \
+  -H "Content-Type: application/json" \
+  -d '{"roomIds":["room-std-01"],"checkIn":"2020-01-01","checkOut":"2020-01-02","guests":99,"email":"a@b.co","fullName":"Fechas Pasadas","phone":"0","specialRequests":""}'
+# → 200 + reserva creada con check_in en 2020 y adults=99.
+
+# Doble booking: repetir dos veces el mismo room+fechas → ambas quedan "pending".
+```
+
+### Resultado esperado vs. obtenido
+
+| | Esperado (diseño) | Obtenido |
+|---|---|---|
+| `checkIn` en el pasado | Rechazo (fecha inválida) | ❌ Reserva creada |
+| Segunda reserva solapada del mismo cuarto | Rechazo (no disponible) | ❌ Ambas aceptadas |
+| `guests` > capacidad de la habitación | Rechazo | ❌ `adults` = 99 persistido |
+
+### Impacto
+
+- Corrupción de la integridad del inventario de reservas (fechas inválidas, overbooking, aforo imposible)
+  que los operadores del panel deben gestionar manualmente. Riesgo de negocio directo.
+- El precio queda íntegro (control presente), por lo que el riesgo residual del sub-vector "precio" es
+  **Bajo**; el de "fechas/disponibilidad/aforo" es **Medio**.
+
+### Evidencia
+
+- Lectura de código + comandos `curl`. La validación que falta se agrega en A3.3 (esquema Zod server-side:
+  fechas futuras, disponibilidad, aforo ≤ capacidad) junto con la defensa anti-CSRF de OP-POC-4.
+
+### Commit donde se reprodujo
+
+No aplica (hallazgo real sobre `develop`).
+
+---
+
+## OP-POC-6 — Log injection en eventos de operaciones (hallazgo documentado, sin repro en este módulo)
+
+| Campo | Valor |
+|---|---|
+| ID | OP-POC-6 |
+| Vector | 3 — alteración de entrada (log injection) |
+| OWASP | A09:2021 Security Logging and Monitoring Failures |
+| NIST CSF 2.0 | DE.CM-01/03/09 (brecha de cobertura), PR.PS-04 |
+| Origen del hallazgo | **Real (negativo).** El módulo de operaciones **no registra ningún evento de auditoría** hoy: no hay una sola llamada a `logAuditEvent` en `checkout/**`, `reservations/**` ni `reservation-lookup/**` (confirmado por búsqueda). |
+
+### Descripción
+
+Al no existir ningún sink de logging en operaciones, **no hay una PoC de log injection reproducible dentro
+de este módulo** (no se puede envenenar un log que no se escribe). Es una **brecha DETECT** ya señalada en
+la Fase 1: creación y cambios de estado de reservas ocurren sin traza de auditoría.
+
+La clase de ataque sí está demostrada de forma **real y cross-module** por Fabian en **AUD-POC-6**
+(inyección de `\r\n` + texto fabricado vía un campo libre que llega a `audit_logs`). El riesgo concreto para
+operaciones aparece **cuando se cierre A3.4** (registrar creación/cambio de reservas vía la API de Fabian):
+campos libres controlados por el huésped —`guest_notes`, `guest_name`— con saltos de línea o caracteres de
+control contaminarían los eventos de operaciones igual que AU-R04.
+
+### Remediación asociada (Fase 3)
+
+- **A3.4** debe (a) instrumentar los eventos de operaciones vía `logAuditEvent` y (b) **sanitizar** los
+  campos libres antes de registrarlos (normalizar saltos de línea / caracteres de control), reutilizando la
+  utilidad de saneo que Fabian expone en F3.3/F3.4 para no reintroducir AU-R04 en este módulo.
+
+### Evidencia
+
+- Búsqueda negativa: sin coincidencias de `logAuditEvent`/`AUDIT_ACTIONS` en el código de operaciones.
+
+### Commit donde se reprodujo
+
+No aplica (hallazgo negativo / de cobertura).
+
+---
+
 ## Coordinación con otros módulos
 
 - **OP-POC-1** reutiliza la misma clase de bug (`.or()` con concatenación de strings) ya presente de
@@ -306,3 +505,9 @@ bitácora del plan de desarrollo al abrir el PR de Fase 2).
   datos controlables por un usuario no privilegiado. Alinear los fixes de salida de Fase 3 (A3.2 / F3.2):
   escape por defecto de React (`{valor}` en vez de `__html`) y, para Paula, una **CSP** global que corte
   la ejecución inline como defensa en profundidad para ambos módulos.
+- **OP-POC-4 (CSRF)** toca cabeceras/criterios de origen que son terreno de Paula (`middleware.ts` / CSP y
+  cookies del sistema, §4.4). Coordinar: el fix de A3.3 (token anti-CSRF o verificación de `Origin` en el
+  route handler) debe encajar con cualquier defensa global de origen que Paula introduzca (P3.x).
+- **OP-POC-6 (log injection)** depende de la API de auditoría de Fabian: A3.4 instrumenta los eventos de
+  operaciones y reutiliza la utilidad de saneo de F3.3/F3.4; sin esa utilidad publicada no se puede cerrar
+  A3.4 sin reintroducir AU-R04.
