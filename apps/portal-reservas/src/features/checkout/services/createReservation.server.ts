@@ -24,7 +24,35 @@
 
 import type { Room } from "@/features/rooms";
 import { createSupabaseServiceClient, DB_COLUMNS, DB_TABLES } from "@hotel/db";
+import { RESERVATION_STATUS_CANCELLED } from "../constants/checkout.constants";
 import type { CheckoutSessionPayload } from "../domain/types";
+
+/**
+ * A3.3 / OP-POC-5: returns true when every room is free for the requested
+ * range. A non-cancelled reservation overlaps when its check_in is before the
+ * new check_out AND its check_out is after the new check_in. Runs as the
+ * service-role client (reservations is deny-all under RLS).
+ */
+export async function areRoomsAvailable(
+  roomIds: string[],
+  checkIn: string,
+  checkOut: string,
+): Promise<boolean> {
+  const supabase = createSupabaseServiceClient();
+  const c = DB_COLUMNS.reservations;
+
+  const { data, error } = await supabase
+    .from(DB_TABLES.RESERVATIONS)
+    .select(c.id)
+    .in(c.room_id, roomIds)
+    .neq(c.status, RESERVATION_STATUS_CANCELLED)
+    .lt(c.check_in, checkOut)
+    .gt(c.check_out, checkIn)
+    .limit(1);
+
+  if (error) return false; // fail closed: treat an error as "not available"
+  return (data?.length ?? 0) === 0;
+}
 
 export async function persistReservation(
   payload: CheckoutSessionPayload,

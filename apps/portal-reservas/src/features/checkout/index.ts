@@ -10,7 +10,11 @@
 
 export { ConfirmationView } from "./components/ConfirmationView";
 export { SuccessView } from "./components/SuccessView";
-export { SESSION_ID_PARAM } from "./constants/checkout.constants";
+export {
+  CHECKOUT_API_ERROR,
+  CHECKOUT_HTTP_STATUS,
+  SESSION_ID_PARAM,
+} from "./constants/checkout.constants";
 export { buildReservationDraft } from "./domain/reservation";
 export type { CheckoutSessionPayload, ReservationDraft } from "./domain/types";
 export { openGatewaySession } from "./services/gateway.server";
