@@ -321,7 +321,7 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 
 **Fase 3**
 - [x] A3.1 Parches del vector 1 (consultas parametrizadas / validación con esquemas, verificación de dueño + RLS).
-- [ ] A3.2 Parches del vector 2 (sanitización de entrada y escape de salida).
+- [x] A3.2 Parches del vector 2 (sanitización de entrada y escape de salida).
 - [ ] A3.3 Parches del vector 3 (recalcular totales server-side, validar integridad de la pasarela, anti-CSRF).
 - [ ] A3.4 Auditoría del módulo: registrar creación/cambio de reservas vía API de Fabian.
 - [ ] A3.5 Tests de regresión + riesgo residual por hallazgo.
@@ -346,6 +346,7 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 | 2026-10-18 | A2.3 Vector 3 (solo documentación, 3 hallazgos **reales** sin código nuevo): OP-POC-4 (CSRF en `POST /api/checkout`, route handler sin token/Origin; contrasta con la Server Action protegida del panel), OP-POC-5 (manipulación de parámetros: fechas en el pasado / sin control de disponibilidad / aforo arbitrario — **precio NO manipulable**, se recalcula server-side) y OP-POC-6 (log injection: hallazgo negativo, operaciones no registra logs; cross-module con AUD-POC-6, se cierra en A3.4) | `security/operations/fase2-pocs` | Hecho; en `operations/fase-2-pocs.md`. Los 3 vectores del enunciado tienen PoC. Falta A2.4 (evidencias en vivo + PR) |
 | 2026-10-18 | Entrega de Fase 2: push de la rama + PR #11 contra `develop` (A2.1+A2.2+A2.3) | `security/operations/fase2-pocs`, PR #11 | Abierto; mergeable, sin CI en el repo. Pendiente revisión cruzada (G3.3) y evidencias en vivo |
 | 2026-10-18 | A3.1 Parches del Vector 1: OP-POC-1 → filtro parametrizado `.eq(code).eq(email)` (fin de la inyección/IDOR, test de regresión reescrito: la PoC ya no funciona); OP-POC-2 → `requirePermission(ROOMS.MANAGE)` en `uploadImage`/`deleteImage`/`reorderImages`. Rama de Fase 3 creada **desde** `fase2-pocs` para aplicar los fixes sobre las vulns | `security/operations/fase3-parches`, commit `1f43498` | Hecho; test en verde; type-check limpio para los archivos tocados. Pendiente A3.2 (escape XSS), A3.3 (validación + anti-CSRF), A3.4 (logging saneado, depende de util de Fabian) |
+| 2026-10-18 | A3.2 Parche del Vector 2 (OP-POC-3): `ReservationGuestCard` deja de usar `dangerouslySetInnerHTML` y renderiza `{guest.notes}` como texto (React escapa) → la PoC de XSS stored deja de ejecutarse. Sin test automatizado de componente (el vitest del panel corre en `environment: node`, sin jsdom/RTL; agregarlo tocaría config compartida §4.4): regresión por código + captura en vivo de A2.4. Alineado con F3.2 + CSP de Paula | `security/operations/fase3-parches`, commit `ceda94a` | Hecho; type-check limpio. Pendiente A3.3 (validación + anti-CSRF), A3.4 (logging saneado, bloqueado por util de Fabian) |
 
 ---
 
