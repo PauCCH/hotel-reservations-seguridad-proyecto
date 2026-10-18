@@ -320,7 +320,7 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 - [ ] A2.4 Entregar `operations/fase-2-pocs.md` + evidencias.
 
 **Fase 3**
-- [ ] A3.1 Parches del vector 1 (consultas parametrizadas / validación con esquemas, verificación de dueño + RLS).
+- [x] A3.1 Parches del vector 1 (consultas parametrizadas / validación con esquemas, verificación de dueño + RLS).
 - [ ] A3.2 Parches del vector 2 (sanitización de entrada y escape de salida).
 - [ ] A3.3 Parches del vector 3 (recalcular totales server-side, validar integridad de la pasarela, anti-CSRF).
 - [ ] A3.4 Auditoría del módulo: registrar creación/cambio de reservas vía API de Fabian.
@@ -344,6 +344,8 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 | 2026-10-18 | Merge de `develop` en la rama (resuelto conflicto del plan; se recuperó la evidencia de Fase 2 de auditoría que la rama había quedado sin integrar) | `security/operations/fase2-pocs`, merge `f615045` | Hecho; test de regresión de A2.1 en verde tras el merge |
 | 2026-10-18 | A2.2 Vector 2: OP-POC-3 (XSS **stored** vía notas del huésped, vulnerabilidad **introducida**) — campo `guest_notes` nuevo + persistencia de la reserva en el checkout + render sin escapar (`dangerouslySetInnerHTML`) en `ReservationGuestCard` del panel. Entrada anónima (checkout público) que ejecuta en la sesión del admin. Alineado con AUD-POC-4 de Fabian | `security/operations/fase2-pocs`, commit `e1828a4` | Hecho; en `operations/fase-2-pocs.md`; type-check de portal/panel limpio (fallos de `@hotel/db` y galería son preexistentes de `develop`); pendiente captura de pantalla en entorno con Supabase conectado |
 | 2026-10-18 | A2.3 Vector 3 (solo documentación, 3 hallazgos **reales** sin código nuevo): OP-POC-4 (CSRF en `POST /api/checkout`, route handler sin token/Origin; contrasta con la Server Action protegida del panel), OP-POC-5 (manipulación de parámetros: fechas en el pasado / sin control de disponibilidad / aforo arbitrario — **precio NO manipulable**, se recalcula server-side) y OP-POC-6 (log injection: hallazgo negativo, operaciones no registra logs; cross-module con AUD-POC-6, se cierra en A3.4) | `security/operations/fase2-pocs` | Hecho; en `operations/fase-2-pocs.md`. Los 3 vectores del enunciado tienen PoC. Falta A2.4 (evidencias en vivo + PR) |
+| 2026-10-18 | Entrega de Fase 2: push de la rama + PR #11 contra `develop` (A2.1+A2.2+A2.3) | `security/operations/fase2-pocs`, PR #11 | Abierto; mergeable, sin CI en el repo. Pendiente revisión cruzada (G3.3) y evidencias en vivo |
+| 2026-10-18 | A3.1 Parches del Vector 1: OP-POC-1 → filtro parametrizado `.eq(code).eq(email)` (fin de la inyección/IDOR, test de regresión reescrito: la PoC ya no funciona); OP-POC-2 → `requirePermission(ROOMS.MANAGE)` en `uploadImage`/`deleteImage`/`reorderImages`. Rama de Fase 3 creada **desde** `fase2-pocs` para aplicar los fixes sobre las vulns | `security/operations/fase3-parches`, commit `1f43498` | Hecho; test en verde; type-check limpio para los archivos tocados. Pendiente A3.2 (escape XSS), A3.3 (validación + anti-CSRF), A3.4 (logging saneado, depende de util de Fabian) |
 
 ---
 
