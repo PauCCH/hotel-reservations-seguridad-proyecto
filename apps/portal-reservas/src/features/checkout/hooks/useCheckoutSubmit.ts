@@ -10,12 +10,12 @@
 
 import { useState } from "react";
 import { CHECKOUT_ERROR_CODE } from "../constants/checkout.constants";
-import type { ReservationDraft, UseCheckoutSubmitReturn } from "../domain/types";
+import type { GuestDetails, ReservationDraft, UseCheckoutSubmitReturn } from "../domain/types";
 import { createCheckoutSession } from "../services/checkout.service";
 
 export function useCheckoutSubmit(
   draft: ReservationDraft,
-  email: string,
+  guest: Pick<GuestDetails, "fullName" | "email" | "phone" | "specialRequests">,
   validate: () => boolean,
 ): UseCheckoutSubmitReturn {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -30,7 +30,11 @@ export function useCheckoutSubmit(
       roomIds: draft.rooms.map((room) => room.id),
       checkIn: draft.checkIn,
       checkOut: draft.checkOut,
-      email,
+      guests: draft.guests,
+      email: guest.email,
+      fullName: guest.fullName,
+      phone: guest.phone,
+      specialRequests: guest.specialRequests,
     })
       .then((result) => {
         // External origin (the gateway's hosted page): full-page redirect.

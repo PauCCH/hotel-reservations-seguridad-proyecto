@@ -65,13 +65,13 @@ Cuando la persona se identifique:
 
 ## 2. Tablero de estado (actualizar siempre)
 
-_Última actualización: 2026-10-16_
+_Última actualización: 2026-10-18_
 
 | Integrante | Módulo | Fase actual | Próxima tarea | Rama activa | Bloqueos |
 |---|---|---|---|---|---|
 | Paula | Autenticación | 2 — Evaluación ofensiva | P2.1 Vector 1 — servidor (A03 + A01/JWT) | — | — |
 | Joseph | Gestión de Usuarios | 2 — Evaluación ofensiva | J2.1 Vector 1 — servidor (A03 + A01) | — | — |
-| Aarón | Operaciones / Transacciones | 2 — Evaluación ofensiva | A2.2 Vector 2 — cliente: XSS stored vía datos del huésped | `security/operations/fase2-pocs` | — |
+| Aarón | Operaciones / Transacciones | 2 — Evaluación ofensiva | A2.4 Entregar `operations/fase-2-pocs.md` + evidencias (push de la rama + PR contra `develop`) | `security/operations/fase2-pocs` | Evidencias en vivo pendientes de entorno con Supabase conectado |
 | Fabian | Logs / Auditoría | 2 — cerrada, pendiente G2 | Esperar G2 (consolidación del doc de PoCs) hasta que Paula/Joseph/Aarón cierren P2.4/J2.4/A2.4; mientras, puede adelantar Fase 3 (F3.1) | `security/audit/fase2-pocs` | G2 depende de los otros 3 módulos |
 
 ### Estado global del repo
@@ -232,6 +232,7 @@ mensajes de error que permiten enumerar usuarios, reflejo de parámetros en pág
 | 2026-10-03 | P1.2 Mapeo NIST CSF 2.0: flujo de datos (ID.AM-03), 42 controles evaluados por componente y resumen de cobertura; 3 observaciones nuevas (O-13 a O-15) | `security/auth/fase1-diagnostico`, commit `f6edcab` | Hecho; 14 cumplen, 14 parciales, 10 no cumplen, 4 por verificar; DETECT casi nulo (§3) |
 | 2026-10-03 | P1.3 Impacto: contexto GV.OC, apetito de riesgo, BIA por 5 procesos, misma escala I×P que Operaciones y Usuarios y 12 escenarios de riesgo inherente | `security/auth/fase1-diagnostico`, commit `60b6871` | Hecho; 1 Crítico (provisional, compartido con US-R01), 3 Altos, 5 Medios, 3 Bajos (§4) |
 | 2026-10-03 | P1.4 Línea base: 18 controles (15 PROTECT, 3 DETECT) con estado, brecha, tarea P3.x y coordinación; 7 filas listas para G1 y límites del análisis | `security/auth/fase1-diagnostico` | Hecho; 2 cumplen, 6 parciales, 10 no cumplen (§5–§8) |
+| 2026-10-05 | P1.5 Entrega de la Fase 1 | `security/auth/fase1-diagnostico`, PR #4 (merge `e41b2a2`) | Mergeado a `develop`; Fase 1 cerrada |
 
 ---
 
@@ -258,7 +259,7 @@ usuario (nombre, email) renderizados en tablas y drawers, flujo de invitaciones 
 - [x] J1.2 Mapeo de componentes/endpoints contra NIST CSF 2.0.
 - [x] J1.3 Impacto operacional y de negocio (GOVERN/IDENTIFY).
 - [x] J1.4 Línea base de controles PROTECT/DETECT.
-- [ ] J1.5 Entregar `docs/proyecto-seguridad/users/fase-1-diagnostico.md`.
+- [x] J1.5 Entregar `docs/proyecto-seguridad/users/fase-1-diagnostico.md`.
 
 **Fase 2**
 - [ ] J2.1 Vector 1 — servidor: inyección en filtros/búsquedas (A03) y escalamiento de privilegios (A01).
@@ -282,6 +283,7 @@ usuario (nombre, email) renderizados en tablas y drawers, flujo de invitaciones 
 | 2026-09-28 | J1.2 Mapeo NIST CSF 2.0: flujo de datos (ID.AM-03), 43 controles evaluados por componente y resumen de cobertura | `security/users/fase1-diagnostico` | Hecho; 14 cumplen, 9 parciales, 18 no cumplen, 2 por verificar; DETECT sin cobertura (§4) |
 | 2026-09-28 | J1.3 Impacto: contexto GV.OC, apetito de riesgo, BIA por proceso, misma escala I×P que Operaciones y 11 escenarios de riesgo inherente | `security/users/fase1-diagnostico` | Hecho; 1 Crítico (provisional), 2 Altos, 6 Medios, 2 Bajos (§5) |
 | 2026-09-28 | J1.4 Línea base: 16 controles (13 PROTECT, 3 DETECT) con estado, brecha, tarea J3.x y coordinación; 7 filas listas para G1 | `security/users/fase1-diagnostico` | Hecho; 2 cumplen, 6 parciales, 8 no cumplen / por verificar (§6–§8) |
+| 2026-10-01 | J1.5 Entrega de la Fase 1 (revisado y mergeado por Aarón) | `security/users/fase1-diagnostico`, PR #6 (merge `9b066e8`) | Mergeado a `develop`; Fase 1 cerrada |
 
 ---
 
@@ -312,9 +314,9 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 - [x] A1.5 Entregar `docs/proyecto-seguridad/operations/fase-1-diagnostico.md`.
 
 **Fase 2**
-- [ ] A2.1 Vector 1 — servidor: inyección en búsqueda/filtros (A03) e IDOR / cambio de estado sin permiso (A01).
-- [ ] A2.2 Vector 2 — cliente: XSS stored desde datos del huésped hacia el panel.
-- [ ] A2.3 Vector 3 — manipulación de parámetros del checkout (precio/fechas) y CSRF (A08) + log injection.
+- [x] A2.1 Vector 1 — servidor: inyección en búsqueda/filtros (A03) e IDOR / cambio de estado sin permiso (A01).
+- [x] A2.2 Vector 2 — cliente: XSS stored desde datos del huésped hacia el panel.
+- [x] A2.3 Vector 3 — manipulación de parámetros del checkout (precio/fechas) y CSRF (A08) + log injection.
 - [ ] A2.4 Entregar `operations/fase-2-pocs.md` + evidencias.
 
 **Fase 3**
@@ -334,8 +336,14 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 | 2026-09-28 | A1.1 Inventario de activos (datos, componentes, servicios externos, controles existentes) + 12 observaciones candidatas para Fase 2 | `security/operations/fase1-diagnostico` | Hecho; en `operations/fase-1-diagnostico.md` (commit `187fd2a`) |
 | 2026-09-28 | A1.2 Mapeo NIST CSF 2.0: flujo de datos (ID.AM-03), 40+ controles evaluados por componente, resumen de cobertura | `security/operations/fase1-diagnostico` | Hecho; DETECT sin cobertura, PR.AA desigual (commit `c52ab13`) |
 | 2026-09-28 | A1.3 Impacto: contexto GV.OC, apetito de riesgo, BIA por proceso, escala I×P y 11 escenarios de riesgo inherente | `security/operations/fase1-diagnostico` | Hecho; 4 Altos (R01–R04), 6 Medios, 1 Bajo (commit `a7b2c68`) |
-| 2026-09-28 | A1.4 Línea base: 16 controles (13 PROTECT, 3 DETECT) con estado, brecha, tarea A3.x y coordinación; 7 filas listas para G1 | `security/operations/fase1-diagnostico` | Hecho; 2 cumplen, 5 parciales, 9 no cumplen / por verificar |
+| 2026-09-28 | A1.4 Línea base: 16 controles (13 PROTECT, 3 DETECT) con estado, brecha, tarea A3.x y coordinación; 7 filas listas para G1 | `security/operations/fase1-diagnostico` | Hecho; 2 cumplen, 5 parciales, 9 no cumplen / por verificar (commit `95900a9`) |
+| 2026-09-28 | A1.5 Entrega de la Fase 1 | `security/operations/fase1-diagnostico`, PR #3 (merge `d68b50c`) | Mergeado a `develop`; Fase 1 cerrada |
+| 2026-10-01 | Revisión y merge de PR #6 (diagnóstico de Users) y PR #5 (cronograma comprimido a sprints Jira) | merges `9b066e8`, `257db31` | Users aporta 7 filas a G1 con la misma escala I×P; G1 lleva 2 de 4 módulos |
+| 2026-10-01 | A2.1 Vector 1: OP-POC-1 (inyección en filtro PostgREST → IDOR, vulnerabilidad **introducida** sobre `/api/reservations/lookup`, con test de regresión en Vitest) + OP-POC-2 (hallazgo **real**: `galleryActions` sin `requirePermission`, confirma O1/O2) | `security/operations/fase2-pocs` | Hecho; en `operations/fase-2-pocs.md`; pendiente evidencia de red para OP-POC-2 y grabación de `curl` de OP-POC-1 en entorno con conectividad a Supabase (ver nota de entorno en el documento) |
 | 2026-10-05 | G1 Matriz General de Gobernanza: consolidación de los 4 diagnósticos sobre la plantilla (27 filas, riesgo AUTH-R01 = US-R01 unido), hoja de resumen y criterios, versión `.md` para revisión; corrección del tablero duplicado | `docs/g1-matriz-gobernanza` | Hecho; 3 Críticos, 12 Altos, 12 Medios; aprobada por los 4 el 2026-10-05 y compartida fuera del repo |
+| 2026-10-18 | Merge de `develop` en la rama (resuelto conflicto del plan; se recuperó la evidencia de Fase 2 de auditoría que la rama había quedado sin integrar) | `security/operations/fase2-pocs`, merge `f615045` | Hecho; test de regresión de A2.1 en verde tras el merge |
+| 2026-10-18 | A2.2 Vector 2: OP-POC-3 (XSS **stored** vía notas del huésped, vulnerabilidad **introducida**) — campo `guest_notes` nuevo + persistencia de la reserva en el checkout + render sin escapar (`dangerouslySetInnerHTML`) en `ReservationGuestCard` del panel. Entrada anónima (checkout público) que ejecuta en la sesión del admin. Alineado con AUD-POC-4 de Fabian | `security/operations/fase2-pocs`, commit `e1828a4` | Hecho; en `operations/fase-2-pocs.md`; type-check de portal/panel limpio (fallos de `@hotel/db` y galería son preexistentes de `develop`); pendiente captura de pantalla en entorno con Supabase conectado |
+| 2026-10-18 | A2.3 Vector 3 (solo documentación, 3 hallazgos **reales** sin código nuevo): OP-POC-4 (CSRF en `POST /api/checkout`, route handler sin token/Origin; contrasta con la Server Action protegida del panel), OP-POC-5 (manipulación de parámetros: fechas en el pasado / sin control de disponibilidad / aforo arbitrario — **precio NO manipulable**, se recalcula server-side) y OP-POC-6 (log injection: hallazgo negativo, operaciones no registra logs; cross-module con AUD-POC-6, se cierra en A3.4) | `security/operations/fase2-pocs` | Hecho; en `operations/fase-2-pocs.md`. Los 3 vectores del enunciado tienen PoC. Falta A2.4 (evidencias en vivo + PR) |
 
 ---
 

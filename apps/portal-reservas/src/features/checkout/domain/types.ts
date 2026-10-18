@@ -49,7 +49,12 @@ export interface CheckoutSessionPayload {
   roomIds: string[];
   checkIn: string;
   checkOut: string;
+  guests: number;
   email: string;
+  fullName: string;
+  phone: string;
+  /** Optional free-text special requests entered by the guest. */
+  specialRequests: string;
 }
 
 /** Response from the checkout API: the URL to redirect the browser to. */

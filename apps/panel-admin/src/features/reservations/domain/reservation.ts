@@ -15,6 +15,8 @@ export interface Guest {
   name: string;
   email: string;
   phone: string;
+  /** Free-text special requests entered by the guest at checkout. */
+  notes?: string;
   initials: string;
 }
 
