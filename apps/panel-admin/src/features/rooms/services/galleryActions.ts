@@ -2,6 +2,8 @@
 
 import { createSupabaseServiceClient, DB_COLUMNS, DB_TABLES } from "@hotel/db";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { requirePermission } from "@/shared/auth/requirePermission";
+import { PERMISSIONS } from "@/shared/constants/permissions";
 import { GALLERY_CONFIG } from "../constants/gallery.constants";
 import type { RoomImage } from "../domain/roomImage.interface";
 
@@ -12,6 +14,11 @@ export async function uploadImage(
   roomId: string,
   file: File,
 ): Promise<{ id: string; url: string; storagePath: string } | null> {
+  // FIXED (A3.1 / OP-POC-2): enforce authorization server-side. These actions
+  // use the service-role client (bypasses RLS), so without this guard any
+  // authenticated session could write the public room gallery.
+  await requirePermission(PERMISSIONS.ROOMS.MANAGE);
+
   try {
     const supabase = createSupabaseServiceClient() as unknown as AnyClient;
 
@@ -69,6 +76,8 @@ export async function uploadImage(
 }
 
 export async function deleteImage(imageId: string): Promise<boolean> {
+  await requirePermission(PERMISSIONS.ROOMS.MANAGE);
+
   const supabase = createSupabaseServiceClient() as unknown as AnyClient;
 
   const { data, error: fetchError } = await supabase
@@ -91,6 +100,8 @@ export async function deleteImage(imageId: string): Promise<boolean> {
 }
 
 export async function reorderImages(orderedIds: string[]): Promise<boolean> {
+  await requirePermission(PERMISSIONS.ROOMS.MANAGE);
+
   const supabase = createSupabaseServiceClient() as unknown as AnyClient;
 
   const results = await Promise.all(

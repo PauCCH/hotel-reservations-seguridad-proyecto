@@ -3,31 +3,22 @@
 /**
  * @file lookupReservation.server.ts — Public "find my reservation" lookup.
  *
- * ⚠️ SECURITY COURSE PROJECT — CONTROLLED VULNERABILITY (OP-POC-1) ⚠️
- * Introduced deliberately per the team decision in
- * `docs/proyecto-seguridad/plan-desarrollo.md` §4.1, because the real code in
- * this module had no reachable injection sink (see finding O11 in
- * `docs/proyecto-seguridad/operations/fase-1-diagnostico.md`). The bug is the
- * opposite of `openGatewaySession` (§OP-C12 in the same diagnostic), which
- * does recompute values server-side instead of trusting client input.
+ * SECURITY COURSE PROJECT — Fase 3 patch for OP-POC-1 (A3.1).
+ * This endpoint used to build its PostgREST filter by concatenating the
+ * attacker-controlled `code`/`email` into a `.or()` string, which let a caller
+ * inject filter *syntax* (an always-true OR clause) and dump every guest's PII
+ * — an OWASP A03 injection that doubled as an A01 IDOR.
  *
- * `reservations` has RLS enabled with NO policies (deny-all), so an
- * unauthenticated "find my reservation" feature has nothing to run the query
- * as *except* the service-role client — this mirrors how `galleryActions.ts`
- * and `reservationService.ts` already use the service client in this module.
+ * THE FIX: both values are now bound through parameterized `.eq()` calls, which
+ * PostgREST sends as literal equality values (never parsed as filter syntax).
+ * The two conditions are AND'd, so a result is returned only when BOTH the
+ * reservation code and the guest email match the row on file — i.e. only the
+ * legitimate owner. This matches the sibling fix for the same bug class at
+ * `getAuditLogs.ts` (Fabian's module, F3.1).
  *
- * THE BUG: `code` and `email` are concatenated directly into a PostgREST
- * `.or()` filter string instead of using `.eq()` (parameterized) calls. Both
- * values are attacker-controlled; filter *syntax* (commas, operators) can
- * be injected, not just filter *values* — the OWASP A03 injection class for
- * PostgREST/Supabase query builders. Because every column is reachable in a
- * forged OR clause, this doubles as an A01 IDOR: an attacker who knows
- * nothing but this form can read every guest's PII and reservation data.
- *
- * DO NOT replicate this pattern. The Fase 3 fix (A3.1) must replace the
- * `.or()` string with parameterized `.eq()` filters — see the real-world
- * version of the same bug class at `getAuditLogs.ts:57` (Fabian's module,
- * F3.1) for the sibling fix.
+ * `reservations` has RLS enabled with NO policies (deny-all), so this public
+ * lookup still runs as the service-role client; least-privilege narrowing of
+ * that access (scoped RLS / a SECURITY DEFINER function) is tracked separately.
  */
 
 import { createSupabaseServiceClient, DB_COLUMNS, DB_TABLES } from "@hotel/db";
@@ -51,16 +42,16 @@ export async function lookupReservation(
   const supabase = createSupabaseServiceClient();
   const c = DB_COLUMNS.reservations;
 
-  // VULNERABLE: unparameterized string concatenation into a PostgREST filter.
-  // Should be `.eq(c.code, input.code).eq(c.guest_email, input.email)`.
-  const filter = `${c.code}.ilike.%${input.code}%,${c.guest_email}.ilike.%${input.email}%`;
-
+  // FIXED (A3.1): parameterized equality filters. `input.code` / `input.email`
+  // are bound as literal values, so they cannot inject filter syntax, and both
+  // must match the same row (AND) — only the reservation's real owner matches.
   const { data, error } = await supabase
     .from(DB_TABLES.RESERVATIONS)
     .select(
       `${c.code}, ${c.guest_name}, ${c.guest_email}, ${c.guest_phone}, ${c.status}, ${c.check_in}, ${c.check_out}, ${c.total_amount}, ${c.currency}`,
     )
-    .or(filter)
+    .eq(c.code, input.code)
+    .eq(c.guest_email, input.email)
     .limit(50);
 
   if (error || !data) return [];
