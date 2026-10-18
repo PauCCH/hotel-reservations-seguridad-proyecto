@@ -54,22 +54,25 @@ export async function areRoomsAvailable(
   return (data?.length ?? 0) === 0;
 }
 
+/** Postgres SQLSTATE for an exclusion-constraint violation (reservations_no_overlap). */
+const PG_EXCLUSION_VIOLATION = "23P01";
+
+export type PersistReservationResult = { ok: true } | { ok: false; reason: "conflict" | "error" };
+
 export async function persistReservation(
   payload: CheckoutSessionPayload,
   rooms: Room[],
   nights: number,
-): Promise<void> {
+): Promise<PersistReservationResult> {
   const supabase = createSupabaseServiceClient();
   const c = DB_COLUMNS.reservations;
 
   const perNight = rooms.reduce((sum, room) => sum + room.price, 0);
 
-  await supabase.from(DB_TABLES.RESERVATIONS).insert({
+  const { error } = await supabase.from(DB_TABLES.RESERVATIONS).insert({
     [c.guest_name]: payload.fullName,
     [c.guest_email]: payload.email,
     [c.guest_phone]: payload.phone,
-    // VULNERABLE SINK SOURCE (OP-POC-3): raw guest input, later rendered
-    // unescaped in the admin panel. The fix is output escaping, not this line.
     [c.guest_notes]: payload.specialRequests,
     [c.room_id]: rooms[0].id,
     [c.check_in]: payload.checkIn,
@@ -78,4 +81,15 @@ export async function persistReservation(
     [c.price_per_night]: perNight,
     [c.total_amount]: perNight * nights,
   });
+
+  if (error) {
+    // A3.3 hardening: the `reservations_no_overlap` EXCLUDE constraint rejects a
+    // concurrent overlapping booking that slipped past areRoomsAvailable (TOCTOU).
+    if ((error as { code?: string }).code === PG_EXCLUSION_VIOLATION) {
+      return { ok: false, reason: "conflict" };
+    }
+    return { ok: false, reason: "error" };
+  }
+
+  return { ok: true };
 }

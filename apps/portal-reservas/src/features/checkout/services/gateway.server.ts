@@ -71,9 +71,15 @@ export async function openGatewaySession(payload: CheckoutSessionPayload): Promi
   const nights = computeNights(input.checkIn, input.checkOut);
 
   // Persist the booking so it appears in the admin panel (realistic flow that
-  // the demo was missing). See createReservation.server.ts for the OP-POC-3
-  // stored-XSS note on the guest_notes field.
-  await persistReservation(input, rooms, nights);
+  // the demo was missing). The DB-level EXCLUDE constraint is authoritative for
+  // availability (closes the TOCTOU race): a concurrent overlapping insert
+  // fails here even if it passed areRoomsAvailable above.
+  const persisted = await persistReservation(input, rooms, nights);
+  if (!persisted.ok) {
+    return persisted.reason === "conflict"
+      ? { status: CHECKOUT_HTTP_STATUS.CONFLICT, body: { error: CHECKOUT_API_ERROR.UNAVAILABLE } }
+      : { status: CHECKOUT_HTTP_STATUS.BAD_GATEWAY, body: { error: CHECKOUT_API_ERROR.GATEWAY } };
+  }
 
   const successUrl = `${ENV.APP_URL}${ROUTES.RESERVE_SUCCESS}?${SESSION_ID_PARAM}=${STRIPE_SESSION_PLACEHOLDER}`;
   const cancelUrl = `${ENV.APP_URL}${ROUTES.RESERVE}`;
