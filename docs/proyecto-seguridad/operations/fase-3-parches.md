@@ -20,7 +20,7 @@
 | OP-POC-2 | 1 — control de acceso | `requirePermission(ROOMS.MANAGE)` | **Bajo** |
 | OP-POC-3 | 2 — XSS stored | Escape de salida (`{guest.notes}`) | **Bajo** |
 | OP-POC-4 | 3 — CSRF | Verificación de `Origin` | **Medio** (sin token anti-CSRF ni rate limiting) |
-| OP-POC-5 | 3 — manipulación de parámetros | Esquema Zod + capacidad + disponibilidad | **Medio** (TOCTOU en disponibilidad) |
+| OP-POC-5 | 3 — manipulación de parámetros | Esquema Zod + capacidad + disponibilidad + restricción `EXCLUDE` | **Bajo** (TOCTOU cerrado a nivel DB) |
 | OP-POC-6 | 3 — log injection | — (A3.4 pendiente) | **Alto** (sin remediar: operaciones aún no registra ni sanea logs) |
 
 ---
@@ -182,11 +182,14 @@ if (!(await areRoomsAvailable(input.roomIds, input.checkIn, input.checkOut)))
 el pasado, rango invertido, `guests = 0` y lista de habitaciones vacía. En verde (5/5). El **precio** ya se
 recalculaba server-side desde el catálogo (no era manipulable), por lo que ese sub-vector no requería parche.
 
-**Riesgo residual: Medio.** Las reglas de negocio quedan validadas en el servidor. Queda una condición de
-carrera **TOCTOU** entre el chequeo de disponibilidad y la inserción (dos peticiones concurrentes para el
-mismo cuarto/fechas podrían colar un solapamiento). Mitigación recomendada (no bloquea la PoC original): una
-restricción de exclusión en Postgres (`EXCLUDE USING gist` sobre rango de fechas por `room_id`) o insertar
-dentro de una transacción con verificación. Se anota como mejora de robustez.
+**Riesgo residual: Bajo.** Las reglas de negocio quedan validadas en el servidor y la condición de carrera
+**TOCTOU** entre el chequeo de disponibilidad y la inserción quedó **cerrada a nivel de base de datos** con
+la restricción `reservations_no_overlap` (migración `20261018000002_reservations_no_overlap.sql`:
+`EXCLUDE USING gist (room_id WITH =, daterange(check_in, check_out, '[)') WITH &&) WHERE status <> 'cancelled'`).
+El chequeo aplicativo `areRoomsAvailable` se mantiene por UX (respuesta temprana), pero el `EXCLUDE` es la
+garantía autoritativa: dos inserciones concurrentes solapadas no pueden coexistir y la segunda recibe
+`409`. Requiere la extensión `btree_gist` (incluida en la migración). Estadías contiguas (check-out = próximo
+check-in) siguen permitidas por el rango semiabierto.
 
 ---
 
