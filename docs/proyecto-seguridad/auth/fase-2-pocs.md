@@ -6,7 +6,7 @@
 | Responsable | Paula |
 | Rama | `security/auth/fase2-pocs` |
 | Insumo | `docs/proyecto-seguridad/auth/fase-1-diagnostico.md` (§2 observaciones, §4.5 riesgos) |
-| Estado | **P2.1 (Vector 1) completo** — AUTH-POC-1 … AUTH-POC-3. P2.2 (V2) y P2.3 (V3) pendientes. |
+| Estado | **P2.1 (V1) + P2.2 (V2) completos** — AUTH-POC-1 … AUTH-POC-4. P2.3 (V3) pendiente. |
 
 > **Vector 1 del enunciado = servidor:** A03 (inyección) **y** A01 (control de acceso / confianza en el JWT).
 > El módulo de autenticación tiene hallazgos **reales y fuertes** en A01 (AUTH-POC-1 y AUTH-POC-2) pero
@@ -295,6 +295,90 @@ A01.
 
 ---
 
+## AUTH-POC-4 — XSS reflejado en `/auth/error` vía `error_description` (introducida)
+
+| Campo | Valor |
+|---|---|
+| ID | AUTH-POC-4 |
+| Vector | 2 — cliente |
+| OWASP | A03:2021 Injection (Cross-Site Scripting reflejado) |
+| NIST CSF 2.0 | PR.PS-06 (desarrollo seguro), PR.DS-01, DE.CM-01 |
+| Origen del hallazgo | **Introducida** (decisión de equipo §4.1). El módulo de auth no tenía ningún sink de XSS real: el portal renderiza todos los valores de auth con JSX (`{errorCode}`, `{descripción}`), que React escapa por defecto. El hallazgo real O-04 (`/auth/error` refleja `error` / `error_description`) es solo **inyección de texto / phishing**, no ejecución de script. Se introdujo un sink realista ("mensaje de error enriquecido") sobre esa misma superficie para demostrar el Vector 2. |
+| Commit de introducción | `chore(security): introduce controlled vuln for AUTH-POC-4` en `security/auth/fase2-pocs` |
+| Componente / archivo:línea | **Sink:** `apps/portal-reservas/src/app/auth/error/authErrorHtml.ts` (`buildErrorDescriptionHtml` → `{ __html }`) renderizado en `AuthErrorContent.tsx` (`dangerouslySetInnerHTML`). **Fuente:** query param `error_description` (reflejado). Test de regresión: `authErrorHtml.test.ts`. |
+
+### Descripción
+
+Mismo patrón que los sinks hermanos del repo: OP-POC-3 (`ReservationGuestCard.tsx`, introducida, Operaciones)
+y el real `AuditLogDetailDrawer.tsx` (Auditoría). La página de error toma el parámetro `error_description`
+de la URL y lo renderiza **como HTML** en vez de como texto:
+
+```ts
+// VULNERABLE — authErrorHtml.ts
+return { __html: raw };   // `raw` = error_description, sin escapar
+```
+```tsx
+// AuthErrorContent.tsx
+<p dangerouslySetInnerHTML={errorDetailHtml} />
+```
+
+Como React solo escapa el texto interpolado con `{...}`, pasar el valor por `dangerouslySetInnerHTML`
+anula esa protección: el atacante controla el **marcado**, no solo el texto. La app no define **CSP** y las
+cookies de sesión son legibles desde JS (hallazgo O-10), así que esto es una primitiva de robo de sesión,
+no solo un `alert`.
+
+### Precondiciones
+
+- Ninguna de autenticación: `/auth/error` es público. El ataque es un **enlace** que la víctima abre
+  (reflejado), p. ej. enviado por correo/chat haciéndose pasar por un aviso del hotel.
+
+### Pasos reproducibles
+
+**Prueba de regresión (sin navegador, demuestra que el sink no sanea):**
+
+```bash
+corepack pnpm --filter @hotel/portal-reservas exec \
+  vitest run src/app/auth/error/authErrorHtml.test.ts
+```
+
+**Reproducción en vivo (solo portal, sin Supabase):**
+
+```bash
+pnpm --filter @hotel/portal-reservas dev   # :3001
+# Abrir en el navegador de la víctima:
+http://localhost:3001/auth/error?error_description=%3Cimg%20src%3Dx%20onerror%3Dalert(document.cookie)%3E
+```
+
+El payload decodificado es `<img src=x onerror=alert(document.cookie)>`: la imagen falla al cargar y
+dispara `onerror`, ejecutando JS en el contexto de la app (aquí, mostrando `document.cookie`).
+
+### Resultado esperado vs. obtenido
+
+| | Esperado (diseño) | Obtenido |
+|---|---|---|
+| `error_description` en la página | Texto escapado (React) | Marcado HTML ejecutado |
+| Control del atacante | El *texto* del mensaje | El *HTML/JS* de la página |
+
+### Impacto
+
+XSS reflejado en una ruta pública de auth. Sin CSP y con cookies legibles desde JS (O-10), permite robo de
+sesión / acciones en nombre de la víctima. Es la versión "con dientes" de O-04.
+
+### Evidencia
+
+- `evidencias/AUTH-POC-4-vitest.txt` — salida del test de regresión (3/3).
+- `evidencias/AUTH-POC-4-xss-alert.png` — `alert(document.cookie)` ejecutándose (reproducción en vivo, pendiente).
+
+### Remediación (Fase 3 → P3.2)
+
+- Renderizar `error_description` como texto (`<p>{raw}</p>`, que React escapa) y eliminar
+  `dangerouslySetInnerHTML` / `buildErrorDescriptionHtml`.
+- Añadir **CSP** global (archivo compartido `next.config`/`middleware`, avisar al equipo — §4.4) y marcar
+  las cookies de sesión `HttpOnly`.
+- La prueba `authErrorHtml.test.ts` **debe empezar a fallar** cuando se aplique el fix.
+
+---
+
 ## Coordinación
 
 - **AUTH-POC-1** comparte causa raíz con el módulo de Gestión de Usuarios (Joseph): `user_roles` y el
@@ -303,5 +387,7 @@ A01.
   reemplazo del claim `auth.jwt() ->> 'role'` se coordina con Aarón antes de tocar sus políticas.
 - **AUTH-POC-3** calca el patrón de OP-POC-1 (Aarón) y del bug real `getAuditLogs.ts:57` (Fabian). El fix
   P3.1 es hermano de A3.1 (Operaciones) y F3.1 (Auditoría).
-- Pendiente P2.2 (V2: XSS en `/auth/error`, O-04) y P2.3 (V3: CSRF / open redirect O-03 + log injection
-  O-08, este último coordinado con Fabian).
+- **AUTH-POC-4** calca OP-POC-3 (Aarón) y el real `AuditLogDetailDrawer.tsx` (Fabian). El fix P3.2 incluye
+  **CSP global** (archivo compartido, §4.4) — avisar al equipo antes de tocar `next.config`/`middleware`.
+- Pendiente P2.3 (V3: CSRF / open redirect O-03 + manipulación de parámetros + log injection O-08, este
+  último coordinado con Fabian).
