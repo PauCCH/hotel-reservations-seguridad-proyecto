@@ -1,0 +1,9 @@
+
+ RUN  v4.1.4 C:/Users/maria/Documents/TEC/VI_Semestre/Seguridad/Proyecto/hotel-reservations-seguridad-proyecto/apps/portal-reservas
+
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  10:46:15
+   Duration  785ms (transform 149ms, setup 0ms, import 343ms, tests 10ms, environment 0ms)
+
