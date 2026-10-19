@@ -317,7 +317,7 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 - [x] A2.1 Vector 1 — servidor: inyección en búsqueda/filtros (A03) e IDOR / cambio de estado sin permiso (A01).
 - [x] A2.2 Vector 2 — cliente: XSS stored desde datos del huésped hacia el panel.
 - [x] A2.3 Vector 3 — manipulación de parámetros del checkout (precio/fechas) y CSRF (A08) + log injection.
-- [x] A2.4 Entregar `operations/fase-2-pocs.md` + evidencias (PR #11 mergeado a `develop`; evidencias en vivo pendientes).
+- [ ] A2.4 Entregar `operations/fase-2-pocs.md` + evidencias (PR #11 mergeado a `develop`; evidencias en vivo pendientes).
 
 **Fase 3**
 - [x] A3.1 Parches del vector 1 (consultas parametrizadas / validación con esquemas, verificación de dueño + RLS).
