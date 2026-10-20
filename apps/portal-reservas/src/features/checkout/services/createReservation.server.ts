@@ -59,28 +59,35 @@ const PG_EXCLUSION_VIOLATION = "23P01";
 
 export type PersistReservationResult = { ok: true } | { ok: false; reason: "conflict" | "error" };
 
+/**
+ * Inserts one reservation row per booked room in a single statement, so the
+ * EXCLUDE constraint guards every room (not only the first) and a conflict on
+ * any of them rolls back the whole booking. `roomDbIds` are the public.rooms
+ * uuids matching `rooms` by index (see `constants/room-catalog.ts`).
+ */
 export async function persistReservation(
   payload: CheckoutSessionPayload,
   rooms: Room[],
+  roomDbIds: string[],
   nights: number,
 ): Promise<PersistReservationResult> {
   const supabase = createSupabaseServiceClient();
   const c = DB_COLUMNS.reservations;
 
-  const perNight = rooms.reduce((sum, room) => sum + room.price, 0);
-
-  const { error } = await supabase.from(DB_TABLES.RESERVATIONS).insert({
-    [c.guest_name]: payload.fullName,
-    [c.guest_email]: payload.email,
-    [c.guest_phone]: payload.phone,
-    [c.guest_notes]: payload.specialRequests,
-    [c.room_id]: rooms[0].id,
-    [c.check_in]: payload.checkIn,
-    [c.check_out]: payload.checkOut,
-    [c.adults]: payload.guests > 0 ? payload.guests : 1,
-    [c.price_per_night]: perNight,
-    [c.total_amount]: perNight * nights,
-  });
+  const { error } = await supabase.from(DB_TABLES.RESERVATIONS).insert(
+    rooms.map((room, i) => ({
+      [c.guest_name]: payload.fullName,
+      [c.guest_email]: payload.email,
+      [c.guest_phone]: payload.phone,
+      [c.guest_notes]: payload.specialRequests,
+      [c.room_id]: roomDbIds[i],
+      [c.check_in]: payload.checkIn,
+      [c.check_out]: payload.checkOut,
+      [c.adults]: payload.guests > 0 ? payload.guests : 1,
+      [c.price_per_night]: room.price,
+      [c.total_amount]: room.price * nights,
+    })),
+  );
 
   if (error) {
     // A3.3 hardening: the `reservations_no_overlap` EXCLUDE constraint rejects a
