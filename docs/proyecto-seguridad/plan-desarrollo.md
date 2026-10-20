@@ -65,13 +65,13 @@ Cuando la persona se identifique:
 
 ## 2. Tablero de estado (actualizar siempre)
 
-_Última actualización: 2026-10-18_
+_Última actualización: 2026-10-20_
 
 | Integrante | Módulo | Fase actual | Próxima tarea | Rama activa | Bloqueos |
 |---|---|---|---|---|---|
 | Paula | Autenticación | 2 — Evaluación ofensiva | P2.1 Vector 1 — servidor (A03 + A01/JWT) | — | — |
 | Joseph | Gestión de Usuarios | 2 — Evaluación ofensiva | J2.1 Vector 1 — servidor (A03 + A01) | — | — |
-| Aarón | Operaciones / Transacciones | 3 — Remediación | Revisión cruzada G3.3 del PR #12 y merge a `develop` (H3); luego A3.7 (video). A3.4 bloqueada | `security/operations/fase3-parches` (PR #12) | A3.4 (auditoría del módulo) bloqueada por la util de saneo de Fabian (F3.3/F3.4) |
+| Aarón | Operaciones / Transacciones | 3 — Remediación | Revisión cruzada G3.3 + merge de PR #14 (evidencias A2.4) y PR #12 (parches, H3); luego A3.7 (video). A3.4 bloqueada | `fase3-parches` (PR #12) + `fase2-pocs` (PR #14) | A3.4 bloqueada por la util de saneo de Fabian (F3.3/F3.4). Follow-up: reconciliar catálogo de rooms (A3.3 disponibilidad/EXCLUDE no verificado) |
 | Fabian | Logs / Auditoría | 2 — cerrada, pendiente G2 | Esperar G2 (consolidación del doc de PoCs) hasta que Paula/Joseph/Aarón cierren P2.4/J2.4/A2.4; mientras, puede adelantar Fase 3 (F3.1) | `security/audit/fase2-pocs` | G2 depende de los otros 3 módulos |
 
 ### Estado global del repo
@@ -351,6 +351,9 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 | 2026-10-18 | A3.5 + A3.6: `operations/fase-3-parches.md` (§4.6) con ficha, mapeo OWASP/NIST, diff antes/después, prueba de regresión y riesgo residual por hallazgo (OP-POC-1/2/3 Bajo; OP-POC-4 Medio por falta de token/rate-limit; OP-POC-5 Medio por TOCTOU; OP-POC-6 Alto, sin remediar). A3.4 documentado como stub bloqueado por Fabian | `security/operations/fase3-parches` | Hecho. Fase 3 completa salvo A3.4 (bloqueada) y A3.7 (video) |
 | 2026-10-18 | Endurecimiento A3.3: cierre de la carrera TOCTOU de OP-POC-5 con restricción `reservations_no_overlap` (`EXCLUDE USING gist`, `btree_gist`); `persistReservation` detecta la violación (SQLSTATE 23P01) y el checkout responde 409. Riesgo residual de OP-POC-5 baja de Medio a **Bajo**. Rama empujada a `origin` | `security/operations/fase3-parches`, commit `08eae14` | Hecho; type-check limpio |
 | 2026-10-18 | Entrega de Fase 2: PR #11 mergeado a `develop` (merge `a26cbc9`). Sincronización de la rama de Fase 3 con `develop` (merge `593f79c`, limpio) y apertura del PR de Fase 3 (A3.1–A3.3) contra `develop` | `security/operations/fase3-parches`, PR #12 | Abierto; mergeable, sin CI en el repo. Pendiente revisión cruzada G3.3 (≥ 1 revisor de otro módulo) y merge para H3 |
+| 2026-10-20 | A2.4 Evidencias en vivo de las 6 PoCs reproducidas contra **Supabase local** (`supabase start`, migraciones + seed; sin tocar el proyecto compartido): OP-POC-1 (inyección→IDOR, fuga de PII), OP-POC-3 (XSS ejecutando en el panel — captura), OP-POC-4/5 (checkout acepta CSRF/params → 200) y OP-POC-6 (negativo). **OP-POC-2 reproducida en vivo**: replay del Server Action `deleteImage` con cuenta sin `rooms:manage` → HTTP 200 + fila borrada (middleware no chequea rol). 9 archivos en `operations/evidencias/` | `security/operations/fase2-pocs`, commit `767a0d6`, PR #14 | Abierto, mergeable. Pendiente G3.3 |
+| 2026-10-20 | Hallazgo al verificar: el checkout **no persiste** (`persistReservation` inserta `room_id` de `mockRooms` string en `reservations.room_id` uuid/FK → `22P02`). Impacto en A3.3: el anti-CSRF y la validación Zod de fechas/aforo **sí** funcionan (verificados), pero el chequeo de disponibilidad + la restricción `EXCLUDE`/TOCTOU de OP-POC-5 son **inalcanzables** (todo checkout da 409, el `EXCLUDE` nunca dispara). Riesgo residual de OP-POC-5 (disponibilidad/overbooking) corregido de Bajo a **⚠️ no verificado**; documentado en `fase-2-pocs.md` y `fase-3-parches.md` | `fase2-pocs` commit `e5c5a6a`, `fase3-parches` commit `15ad4b0` | Hecho. Fix real (reconciliar catálogo de rooms) queda como **follow-up** post-entrega |
+| 2026-10-20 | Merge de `develop` (con PoCs de Users #10 y 2.ª entrega de Operaciones #13) en ambas ramas: **sin conflictos**. PR #14 y PR #12 quedan `MERGEABLE`/`CLEAN` y al día con `develop` | `fase2-pocs` merge `3b63764`, `fase3-parches` merge `7adf3f6` | Listos para mergear; pendiente solo G3.3 |
 
 ---
 
