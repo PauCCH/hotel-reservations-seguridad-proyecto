@@ -47,7 +47,16 @@ export const AdminsTable = ({
           >
             {admins?.map((user) => (
               <Table.Row key={user.id}>
-                <Table.Cell>{user.full_name}</Table.Cell>
+                {/* VULNERABILIDAD INTRODUCIDA A PROPOSITO -- J2-POC-8 (Fase 2, Vector 2, XSS Stored, O11)
+                    NO es codigo original del repo. React escapa JSX por defecto (`{user.full_name}`),
+                    asi que no habia ningun sink inseguro real en este modulo (ver fase-2-pocs.md).
+                    Esta linea reemplaza el render seguro original por dangerouslySetInnerHTML
+                    unicamente para demostrar, de forma controlada, el patron de XSS stored que pide
+                    el punto 2 del enunciado del proyecto. Se revierte en el PR de remediacion de
+                    Fase 3 (ver docs/proyecto-seguridad/users/fase-2-pocs.md y fase-3-remediacion.md). */}
+                <Table.Cell>
+                  <span dangerouslySetInnerHTML={{ __html: user.full_name ?? "" }} />
+                </Table.Cell>
                 <Table.Cell>{user.email}</Table.Cell>
                 <Table.Cell>
                   {user.is_active ? (

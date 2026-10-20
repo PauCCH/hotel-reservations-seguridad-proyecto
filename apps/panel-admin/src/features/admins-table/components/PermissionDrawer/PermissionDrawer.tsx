@@ -38,7 +38,16 @@ export function PermissionDrawer({ isOpen, onClose, admin, onSuccess }: Permissi
         <Drawer.Dialog>
           <Drawer.Header>
             <Drawer.Heading>
-              {TEXTS.TITLE} - {admin.full_name ?? admin.email}
+              {/* VULNERABILIDAD INTRODUCIDA A PROPOSITO -- J2-POC-8 (Fase 2, Vector 2, XSS Stored, O11)
+                  Igual que en AdminsTable.tsx: esto NO es codigo original, reemplaza el JSX seguro
+                  original (`{admin.full_name ?? admin.email}`) por dangerouslySetInnerHTML solo para
+                  la PoC. Se revierte en el PR de remediacion de Fase 3. */}
+              {TEXTS.TITLE} -{" "}
+              {admin.full_name ? (
+                <span dangerouslySetInnerHTML={{ __html: admin.full_name }} />
+              ) : (
+                admin.email
+              )}
             </Drawer.Heading>
           </Drawer.Header>
 
