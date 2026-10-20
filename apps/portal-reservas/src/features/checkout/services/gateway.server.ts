@@ -20,10 +20,11 @@ import {
   STRIPE,
   STRIPE_SESSION_PLACEHOLDER,
 } from "../constants/checkout.constants";
+import { checkoutPayloadSchema } from "../domain/checkoutSchema";
 import { computeNights } from "../domain/reservation";
 import { buildStripeCheckoutParams } from "../domain/stripe";
 import type { CheckoutSessionPayload } from "../domain/types";
-import { persistReservation } from "./createReservation.server";
+import { areRoomsAvailable, persistReservation } from "./createReservation.server";
 
 export interface GatewayResult {
   status: number;
@@ -31,20 +32,54 @@ export interface GatewayResult {
 }
 
 export async function openGatewaySession(payload: CheckoutSessionPayload): Promise<GatewayResult> {
-  const rooms = findRoomsByIds(payload.roomIds ?? []);
-  if (rooms.length === 0 || !payload.checkIn || !payload.checkOut) {
+  // A3.3 / OP-POC-5: strict server-side validation of the client payload
+  // (shape, future dates, positive guest count) before anything is trusted.
+  const parsed = checkoutPayloadSchema.safeParse(payload);
+  if (!parsed.success) {
+    return {
+      status: CHECKOUT_HTTP_STATUS.BAD_REQUEST,
+      body: { error: CHECKOUT_API_ERROR.INVALID_REQUEST },
+    };
+  }
+  const input = parsed.data;
+
+  const rooms = findRoomsByIds(input.roomIds);
+  if (rooms.length !== input.roomIds.length) {
     return {
       status: CHECKOUT_HTTP_STATUS.BAD_REQUEST,
       body: { error: CHECKOUT_API_ERROR.INVALID_REQUEST },
     };
   }
 
-  const nights = computeNights(payload.checkIn, payload.checkOut);
+  // Capacity: guests cannot exceed the combined capacity of the booked rooms.
+  const totalCapacity = rooms.reduce((sum, room) => sum + room.capacity, 0);
+  if (input.guests > totalCapacity) {
+    return {
+      status: CHECKOUT_HTTP_STATUS.BAD_REQUEST,
+      body: { error: CHECKOUT_API_ERROR.INVALID_REQUEST },
+    };
+  }
+
+  // Availability: reject overlapping bookings for any of the rooms.
+  if (!(await areRoomsAvailable(input.roomIds, input.checkIn, input.checkOut))) {
+    return {
+      status: CHECKOUT_HTTP_STATUS.CONFLICT,
+      body: { error: CHECKOUT_API_ERROR.UNAVAILABLE },
+    };
+  }
+
+  const nights = computeNights(input.checkIn, input.checkOut);
 
   // Persist the booking so it appears in the admin panel (realistic flow that
-  // the demo was missing). See createReservation.server.ts for the OP-POC-3
-  // stored-XSS note on the guest_notes field.
-  await persistReservation(payload, rooms, nights);
+  // the demo was missing). The DB-level EXCLUDE constraint is authoritative for
+  // availability (closes the TOCTOU race): a concurrent overlapping insert
+  // fails here even if it passed areRoomsAvailable above.
+  const persisted = await persistReservation(input, rooms, nights);
+  if (!persisted.ok) {
+    return persisted.reason === "conflict"
+      ? { status: CHECKOUT_HTTP_STATUS.CONFLICT, body: { error: CHECKOUT_API_ERROR.UNAVAILABLE } }
+      : { status: CHECKOUT_HTTP_STATUS.BAD_GATEWAY, body: { error: CHECKOUT_API_ERROR.GATEWAY } };
+  }
 
   const successUrl = `${ENV.APP_URL}${ROUTES.RESERVE_SUCCESS}?${SESSION_ID_PARAM}=${STRIPE_SESSION_PLACEHOLDER}`;
   const cancelUrl = `${ENV.APP_URL}${ROUTES.RESERVE}`;
@@ -58,7 +93,7 @@ export async function openGatewaySession(payload: CheckoutSessionPayload): Promi
   const params = buildStripeCheckoutParams({
     rooms,
     nights,
-    email: payload.email,
+    email: input.email,
     successUrl,
     cancelUrl,
   });
