@@ -417,13 +417,24 @@ recibirlo como parámetro del cliente, calculando el nuevo valor en servidor; (2
 `SELF_MODIFY`/`OWNER_MODIFY` que ya existen en `updateUserPermissions`, rechazando como destino tanto al
 propio emisor como a cualquier cuenta con rol `owner`.
 
-### Limitaciones de esta prueba
-No se verificó en esta sesión si `auth.admin.signOut(adminId)` (línea 24, que recibe un `adminId`/UUID en
-vez del JWT de sesión que espera la API de Supabase, según nota de `fase-1-diagnostico.md`) realmente
-invalida la sesión activa del owner en el navegador — habría requerido mantener una segunda sesión del
-owner abierta en paralelo durante el ataque y observarla en vivo, lo cual se descartó por el riesgo de
-perder el único acceso de owner disponible en el entorno de pruebas. Queda como paso manual en
-`comprobacion.md`.
+### Verificación adicional — ¿`signOut(adminId)` invalida la sesión real? (punto extra de O5, verificado por Seph)
+En la sesión original de Claude no se verificó si `auth.admin.signOut(adminId)` (línea 24, que recibe un
+`adminId`/UUID en vez del JWT de sesión que espera típicamente la API de Supabase, según nota de
+`fase-1-diagnostico.md`) realmente invalida la sesión activa del owner en el navegador — habría requerido
+mantener una segunda sesión del owner abierta en paralelo durante el ataque, lo cual se descartó por el
+riesgo de perder el único acceso de owner disponible en el entorno de pruebas.
+
+Seph ejecutó esta verificación manualmente con dos pestañas: la pestaña A con el owner logueado e inactivo
+en `/admin/dashboard`, y desde la pestaña B (sesión de bajo privilegio) se llamó a `toggleAdminStatus` contra
+el UUID del owner (`24d6ab8a-b0d5-4575-9dc9-d6712c83ed74`) con el mismo `Next-Action` de esta PoC. Resultado:
+al volver a la pestaña A **sin recargar** y navegar a "Reservas", el owner recibió **403 — Acceso
+Restringido** de inmediato.
+
+**Conclusión: resultado negativo, no hay hallazgo adicional que agregar a O5.** `signOut(adminId)` con el
+UUID del usuario **sí** invalida correctamente la sesión activa, a pesar de no recibir el JWT puntual de
+esa sesión — la API de Supabase Admin revoca todas las sesiones de ese `user_id`, que es más amplio (y en
+este caso, suficiente) que revocar una sola sesión por JWT. Se documenta como una duda cerrada, no como un
+hallazgo nuevo.
 
 ---
 
@@ -752,6 +763,81 @@ explotable de inmediato):
 
 ---
 
+## J2-POC-9 — Políticas RLS permisivas en `profiles` y `user_permissions` (O7/O8 confirmado)
+
+| Campo | Valor |
+|---|---|
+| **Vector** | Vector 1 — servidor (capa de base de datos, por debajo de Next.js — mismo patrón que J2-POC-6/O9) |
+| **OWASP** | A01:2021 — Broken Access Control (las políticas RLS no filtran por usuario, dejando el control de acceso real solo en manos de `requirePermission` del lado de Next.js) |
+| **Subcategoría NIST CSF 2.0** | PR.AA-05 (permisos y autorizaciones gestionados según menor privilegio); PR.DS-01 (protección de la confidencialidad de los datos en reposo) |
+| **Origen del hallazgo** | **Real** (no introducida) — observaciones **O7** y **O8** de `users/fase-1-diagnostico.md` §3. |
+| **Componente / archivo:línea** | Políticas RLS (`CREATE POLICY`) sobre las tablas `public.profiles` y `public.user_permissions`, definidas en las migraciones de `packages/db/supabase/migrations/` — ver `fase-1-diagnostico.md` para el archivo:línea exacto de cada política señalada en el diagnóstico. |
+| **Commit donde se reprodujo** | `9fed57e` (rama `security/users/fase2-pocs`) |
+| **Ejecutado por** | **Seph, manualmente** — no por Claude. Ver nota metodológica abajo. |
+
+### Nota metodológica — por qué esta PoC no la ejecutó Claude
+El paso de extraer y decodificar el JWT de la cookie de sesión activa (`sb-127-auth-token`) fue bloqueado
+explícitamente por el clasificador de seguridad de la herramienta usada por Claude en esta sesión, sin
+excepciones y sin rutas alternativas sugeridas. Por eso esta PoC, a diferencia de las ocho anteriores, fue
+reproducida por Seph en su propio navegador y documentada aquí a partir de su evidencia.
+
+### Precondiciones
+- Sesión autenticada como `admin@hotel.local` (cuenta de bajo privilegio; al momento de esta prueba, con el
+  único permiso `permissions:manage`, heredado del estado final de J2-POC-3).
+- Acceso a una terminal para llamar directo a PostgREST (`http://127.0.0.1:54321`), por fuera de la app
+  Next.js.
+
+### Pasos reproducibles
+1. **Extracción del JWT propio.** Desde la consola de DevTools, ya logueado como `admin@hotel.local`:
+   ```js
+   const raw = document.cookie.split('; ').find(c => c.startsWith('sb-127-auth-token='))?.split('=')[1];
+   const json = JSON.parse(atob(decodeURIComponent(raw).replace(/^base64-/, '')));
+   copy(json.access_token);
+   ```
+2. **Llamada directa a `profiles`**, con la `apikey` anon pública y el JWT propio como `Authorization`:
+   ```bash
+   curl -s "http://127.0.0.1:54321/rest/v1/profiles?select=*" \
+     -H "apikey: <anon key pública de .env.local>" \
+     -H "Authorization: Bearer <JWT de admin@hotel.local>"
+   ```
+3. **Llamada directa a `user_permissions`**, mismo patrón:
+   ```bash
+   curl -s "http://127.0.0.1:54321/rest/v1/user_permissions?select=*" \
+     -H "apikey: <anon key pública de .env.local>" \
+     -H "Authorization: Bearer <JWT de admin@hotel.local>"
+   ```
+
+### Resultado esperado vs. obtenido
+- **Esperado:** `profiles` debería devolver únicamente la fila correspondiente a `admin@hotel.local`
+  (`554c5cb8-ab74-4863-bdb5-c79cf24de187`); `user_permissions` debería devolver únicamente las filas cuyo
+  `user_id` sea ese mismo UUID.
+- **Obtenido:** `profiles` devolvió **11 registros** — todos los administradores del sistema, incluido el
+  owner (`24d6ab8a-b0d5-4575-9dc9-d6712c83ed74`, `full_name: "Hotel Owner"`) y las cuentas usadas en PoCs
+  anteriores (incluida la del payload XSS de J2-POC-8). `user_permissions` devolvió filas con múltiples
+  `user_id` distintos — incluidos los 14 permisos completos del owner — no solo los de la sesión que hizo
+  la llamada.
+
+### Impacto
+Confirma que las políticas RLS de `profiles` y `user_permissions` **no filtran por usuario**: cualquier
+cuenta autenticada, sin importar su rol o permisos (en este caso, una cuenta con un solo permiso ajeno a
+"ver administradores"), puede leer directamente contra PostgREST el perfil completo y el conjunto de
+permisos de **cualquier** otra cuenta del sistema, incluido el owner. La única protección real contra esto
+era la capa de `requirePermission()` dentro de los Server Actions de Next.js — la misma capa que J2-POC-1/2/3
+ya demostraron que tiene huecos, y que de todos modos **no existe en absoluto** a nivel de PostgREST/base de
+datos. Encadenado con J2-POC-8 (cookie de sesión robada vía XSS, sin `HttpOnly`), un atacante con esa cookie
+robada no necesita ningún permiso de la app para enumerar a todos los administradores y sus permisos — le
+basta con el JWT que ya tiene.
+
+### Causa raíz (para Fase 3 — J3.1 / J3.3)
+Las políticas RLS de ambas tablas necesitan una cláusula `USING` que compare contra `auth.uid()` — por
+ejemplo, para `profiles`: `USING (auth.uid() = id OR <rol del usuario actual IN ('admin','owner')
+AND <permiso explícito de ver otros perfiles>)`, y análogo para `user_permissions` filtrando por
+`user_id = auth.uid()` salvo que quien consulta tenga el permiso `admins:view`/`permissions:manage`. Esto no
+requiere ninguna herramienta de pago — es SQL de política RLS nativo de Postgres/Supabase, ya incluido en
+el stack.
+
+---
+
 ## J2.1 — Inyección en filtros/búsquedas (A03): hallazgo negativo, documentado por código
 
 Como parte de J2.1 se revisó explícitamente si algún endpoint de este módulo (vistas de `admins-table` o
@@ -782,16 +868,18 @@ contra la base de datos, podrían tener superficie distinta — fuera del alcanc
 
 ---
 
-## Limitaciones de esta fase (pendientes de verificación manual)
+## Limitaciones de esta fase — ya cerradas
 
 Una observación de `fase-1-diagnostico.md` no se pudo convertir en PoC automatizada por Claude dentro de
-este entorno de trabajo (ver `comprobacion.md` para el paso a paso manual):
+este entorno de trabajo (ver `comprobacion.md` para el histórico del paso a paso manual que se le dejó a
+Seph). **Esta limitación ya se cerró:**
 
-- **O7/O8 (RLS de `profiles` / `user_permissions`).** Requiere extraer el JWT de la sesión activa
+- **O7/O8 (RLS de `profiles` / `user_permissions`).** Requería extraer el JWT de la sesión activa
   (cookie `sb-127-auth-token`) para hacer llamadas directas a PostgREST con ese token y confirmar si las
   políticas RLS filtran correctamente por usuario. La extracción/decodificación de ese token fue bloqueada
   por el sistema de seguridad de Claude Code (clasificador automático), que indicó explícitamente no
-  intentar rutas alternativas para evitarlo. Queda como paso manual en `comprobacion.md`.
+  intentar rutas alternativas para evitarlo. **Seph lo reprodujo manualmente** — ver **J2-POC-9** arriba,
+  resultado confirmado: las políticas RLS no filtran por usuario.
 
 **O9 ya no está bloqueada** — ver J2-POC-6: se encontró y reprodujo una vía **más grave y más simple** que
 la originalmente prevista en el diagnóstico (no hace falta `psql` ni ningún JWT; un `curl`/`fetch` sin
@@ -805,11 +893,11 @@ real (remover el sink + CSP + validación + revisión de la cookie) es, a propó
 **Fase 3** (ver nota metodológica en J2-POC-8), para que esa fase tenga un diff de remediación real y
 trazabilidad de Git genuina, igual que las otras 7 PoCs.
 
-Con J2-POC-8 cerrado, **no queda ningún checklist de Fase 2 pendiente de ejecución por parte de Claude**
-dentro del alcance del módulo `users` — lo único que sigue bloqueado es O7/O8 (arriba), que requiere el
-paso manual de Seph descrito en `comprobacion.md`. **Ojo:** a diferencia de las sesiones anteriores, el
-código de `apps/panel-admin` **sí tiene cambios reales que commitear** en este PR (los dos archivos de
-J2-POC-8) — no es un PR solo de documentación.
+Con J2-POC-8 y J2-POC-9 cerrados, **no queda ningún checklist de Fase 2 pendiente** dentro del alcance del
+módulo `users` — tanto lo que pudo ejecutar Claude como lo que requería el paso manual de Seph (O7/O8) ya
+está documentado. **Ojo:** a diferencia de las sesiones anteriores, el código de `apps/panel-admin` **sí
+tiene cambios reales que commitear** en este PR (los dos archivos de J2-POC-8) — no es un PR solo de
+documentación.
 
 ---
 
@@ -933,6 +1021,17 @@ del owner, capturando el banner rojo con el `document.cookie` real de esa sesió
 panel Network de DevTools visible. Evidencia: `J2-POC-8_01` (reemplaza a la evidencia original con el mismo
 hallazgo, confirmado de nuevo end-to-end en esta sesión).
 
+### O7/O8 y punto extra de O5 — verificados por Seph después de esta ronda
+Estos dos puntos no forman parte de la re-ejecución de las 8 PoCs (no necesitaban repetirse: nunca se habían
+podido correr en primer lugar). Seph los verificó manualmente después de cerrar esta ronda, con su propio
+navegador y terminal:
+- **O7/O8** → confirmado como hallazgo real. Ver **J2-POC-9** (sección nueva, arriba) para el detalle
+  completo y la evidencia.
+- **Punto extra de O5** (`signOut(adminId)` con UUID) → resultado negativo, no genera hallazgo nuevo. Ver
+  la subsección "Verificación adicional" dentro de **J2-POC-5** (arriba).
+- Evidencia de ambos guardada también en `evidencias_r2/`, mismo convenio de nombres (ver sección 6 de
+  `comprobacion.md` para los nombres de archivo exactos acordados con Seph).
+
 ### Estado final del entorno al cierre de esta ronda
 - **6 invitaciones** en estado `"accepted"` o `"pending"` con cuentas activas reales; **3** en estado
   `"revoked"` (incluida la nueva, `j2poc3-target-r2`, borrada por J2-POC-7a de esta ronda).
@@ -944,8 +1043,9 @@ hallazgo, confirmado de nuevo end-to-end en esta sesión).
 - El código de `apps/panel-admin` **no cambió** en esta ronda — los dos archivos de J2-POC-8 ya estaban
   commiteados; esta ronda solo generó evidencia nueva y modificó datos (permisos, invitaciones) vía las
   propias Server Actions vulnerables, que es exactamente el comportamiento que cada PoC documenta.
-- **Siguiente paso para Seph:** revisar la carpeta `evidencias_r2/`, hacer `git add` de esas 24 imágenes +
-  este documento actualizado, y usar el mensaje de commit / PR de `comprobacion.md` (actualizado en la misma
-  sesión) para el PR de Fase 2. El código fuente (`AdminsTable.tsx`, `PermissionDrawer.tsx`) ya estaba
-  commiteado de una sesión anterior — verificar con `git status` antes de hacer commit para confirmar que no
-  hay cambios de código pendientes, solo evidencia y documentación.
+- **Siguiente paso para Seph:** revisar la carpeta `evidencias_r2/` (las 23 imágenes de la re-ejecución de
+  las 8 PoCs + las nuevas de O7/O8 y del punto extra de O5), hacer `git add` de todo eso + este documento
+  actualizado, y usar el mensaje de commit / PR de `comprobacion.md` (actualizado en la misma sesión) para
+  el PR de Fase 2. El código fuente (`AdminsTable.tsx`, `PermissionDrawer.tsx`) ya estaba commiteado de una
+  sesión anterior — verificar con `git status` antes de hacer commit para confirmar que no hay cambios de
+  código pendientes, solo evidencia y documentación.
