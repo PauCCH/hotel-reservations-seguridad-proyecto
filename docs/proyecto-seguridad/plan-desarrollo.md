@@ -71,7 +71,7 @@ _Última actualización: 2026-10-20_
 |---|---|---|---|---|---|
 | Paula | Autenticación | 2 — Evaluación ofensiva | P2.1 Vector 1 — servidor (A03 + A01/JWT) | — | — |
 | Joseph | Gestión de Usuarios | 2 — Evaluación ofensiva | J2.1 Vector 1 — servidor (A03 + A01) | — | — |
-| Aarón | Operaciones / Transacciones | 3 — Remediación | Revisión cruzada G3.3 + merge de PR #14 (evidencias A2.4) y PR #12 (parches, H3); luego A3.7 (video). A3.4 bloqueada | `fase3-parches` (PR #12) + `fase2-pocs` (PR #14) | A3.4 bloqueada por la util de saneo de Fabian (F3.3/F3.4). Follow-up: reconciliar catálogo de rooms (A3.3 disponibilidad/EXCLUDE no verificado) |
+| Aarón | Operaciones / Transacciones | 3 — Remediación | PR del catálogo de rooms (G3.3) + A3.7 (video). A3.4 bloqueada | `security/operations/fase3-checkout-rooms-catalog` | A3.4 bloqueada por la util de saneo de Fabian (F3.3/F3.4) |
 | Fabian | Logs / Auditoría | 2 — cerrada, pendiente G2 | Esperar G2 (consolidación del doc de PoCs) hasta que Paula/Joseph/Aarón cierren P2.4/J2.4/A2.4; mientras, puede adelantar Fase 3 (F3.1) | `security/audit/fase2-pocs` | G2 depende de los otros 3 módulos |
 
 ### Estado global del repo
@@ -317,7 +317,7 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 - [x] A2.1 Vector 1 — servidor: inyección en búsqueda/filtros (A03) e IDOR / cambio de estado sin permiso (A01).
 - [x] A2.2 Vector 2 — cliente: XSS stored desde datos del huésped hacia el panel.
 - [x] A2.3 Vector 3 — manipulación de parámetros del checkout (precio/fechas) y CSRF (A08) + log injection.
-- [ ] A2.4 Entregar `operations/fase-2-pocs.md` + evidencias (PR #11 mergeado a `develop`; evidencias en vivo pendientes).
+- [x] A2.4 Entregar `operations/fase-2-pocs.md` + evidencias (PR #11 y PR #14 mergeados a `develop`).
 
 **Fase 3**
 - [x] A3.1 Parches del vector 1 (consultas parametrizadas / validación con esquemas, verificación de dueño + RLS).
@@ -354,6 +354,8 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 | 2026-10-20 | A2.4 Evidencias en vivo de las 6 PoCs reproducidas contra **Supabase local** (`supabase start`, migraciones + seed; sin tocar el proyecto compartido): OP-POC-1 (inyección→IDOR, fuga de PII), OP-POC-3 (XSS ejecutando en el panel — captura), OP-POC-4/5 (checkout acepta CSRF/params → 200) y OP-POC-6 (negativo). **OP-POC-2 reproducida en vivo**: replay del Server Action `deleteImage` con cuenta sin `rooms:manage` → HTTP 200 + fila borrada (middleware no chequea rol). 9 archivos en `operations/evidencias/` | `security/operations/fase2-pocs`, commit `767a0d6`, PR #14 | Abierto, mergeable. Pendiente G3.3 |
 | 2026-10-20 | Hallazgo al verificar: el checkout **no persiste** (`persistReservation` inserta `room_id` de `mockRooms` string en `reservations.room_id` uuid/FK → `22P02`). Impacto en A3.3: el anti-CSRF y la validación Zod de fechas/aforo **sí** funcionan (verificados), pero el chequeo de disponibilidad + la restricción `EXCLUDE`/TOCTOU de OP-POC-5 son **inalcanzables** (todo checkout da 409, el `EXCLUDE` nunca dispara). Riesgo residual de OP-POC-5 (disponibilidad/overbooking) corregido de Bajo a **⚠️ no verificado**; documentado en `fase-2-pocs.md` y `fase-3-parches.md` | `fase2-pocs` commit `e5c5a6a`, `fase3-parches` commit `15ad4b0` | Hecho. Fix real (reconciliar catálogo de rooms) queda como **follow-up** post-entrega |
 | 2026-10-20 | Merge de `develop` (con PoCs de Users #10 y 2.ª entrega de Operaciones #13) en ambas ramas: **sin conflictos**. PR #14 y PR #12 quedan `MERGEABLE`/`CLEAN` y al día con `develop` | `fase2-pocs` merge `3b63764`, `fase3-parches` merge `7adf3f6` | Listos para mergear; pendiente solo G3.3 |
+| 2026-10-20 | PR #12, #14 y #15 mergeados a `develop` (último merge `191ad4e`); A2.4 cerrada | — | Hecho |
+| 2026-10-20 | A3.3 — reconciliación del catálogo de rooms (opción A): migración `20261020000001_seed_portal_catalog_rooms.sql` (8 habitaciones con uuid fijo) + mapa server-side `room-catalog.ts` (catálogo → uuid) + `persistReservation` inserta una fila por habitación. Verificado en vivo contra Supabase local (10 casos: checkout persiste, solapamiento 409, carrera de 5 requests → 1 fila, `EXCLUDE` dispara `23P01`, multi-habitación atómico, regresiones de fechas/aforo/Origin). Test `room-catalog.test.ts` en verde. OP-POC-5 vuelve a **Bajo** con evidencia | `security/operations/fase3-checkout-rooms-catalog`, commit `ce54581`; evidencia `A3.3-rooms-catalog-live.txt` | Hecho; pendiente PR + G3.3 |
 
 ---
 

@@ -468,6 +468,8 @@ curl -s -X POST http://localhost:3001/api/checkout \
   El sub-vector *disponibilidad/overbooking* y la "fila creada" **no se ejercitan** por el bug de persistencia
   (`room_id` mock `"mv-1"` vs columna `uuid`/FK → `22P02`): la consulta de disponibilidad de A3.3 y el insert
   fallan antes de tocar la lógica de solapamiento. Detalle e impacto en el riesgo residual: `fase-3-parches.md`.
+  **Resuelto en Fase 3** (commit `ce54581`, catálogo de rooms reconciliado): el checkout persiste y la
+  disponibilidad/`EXCLUDE` se verifican en vivo (`evidencias/A3.3-rooms-catalog-live.txt`).
 
 ### Commit donde se reprodujo
 
