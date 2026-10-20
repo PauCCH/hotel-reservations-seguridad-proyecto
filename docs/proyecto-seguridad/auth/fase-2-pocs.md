@@ -6,7 +6,7 @@
 | Responsable | Paula |
 | Rama | `security/auth/fase2-pocs` |
 | Insumo | `docs/proyecto-seguridad/auth/fase-1-diagnostico.md` (§2 observaciones, §4.5 riesgos) |
-| Estado | **P2.1 (V1) + P2.2 (V2) completos** — AUTH-POC-1 … AUTH-POC-4. P2.3 (V3) pendiente. |
+| Estado | **P2.1 (V1) + P2.2 (V2) + P2.3 (V3) completos** — AUTH-POC-1 … AUTH-POC-6. |
 
 > **Vector 1 del enunciado = servidor:** A03 (inyección) **y** A01 (control de acceso / confianza en el JWT).
 > El módulo de autenticación tiene hallazgos **reales y fuertes** en A01 (AUTH-POC-1 y AUTH-POC-2) pero
@@ -379,6 +379,151 @@ sesión / acciones en nombre de la víctima. Es la versión "con dientes" de O-0
 
 ---
 
+## AUTH-POC-5 — Open redirect vía `callbackUrl` (manipulación de parámetros)
+
+| Campo | Valor |
+|---|---|
+| ID | AUTH-POC-5 |
+| Vector | 3 — manipulación de entrada |
+| OWASP | A01:2021 Broken Access Control (Unvalidated Redirect) + A08:2021 (manipulación de parámetros) |
+| NIST CSF 2.0 | PR.PS-06, PR.DS-02, ID.RA-01 |
+| Origen del hallazgo | **Real** (confirma O-03 de la Fase 1) |
+| Componente / archivo:línea | `apps/portal-reservas/src/app/auth/callback/route.ts:34-35` (`new URL(callbackUrl, origin)`); `apps/portal-reservas/src/features/auth/services/loginAction.ts:64` (`redirect(callbackUrl || ROUTES.HOME)`) |
+
+### Descripción
+
+Dos flujos de auth redirigen al valor del parámetro `callbackUrl` **sin validar** que sea una ruta interna:
+
+```ts
+// callback/route.ts:34
+const callbackUrl = searchParams.get(CALLBACK_SEARCH_PARAMS.CALLBACK_URL) || ROUTES.HOME;
+return NextResponse.redirect(new URL(callbackUrl, origin));   // origin ignorado si callbackUrl es absoluto
+```
+```ts
+// loginAction.ts:64
+redirect(callbackUrl || ROUTES.HOME);   // redirect() de Next acepta URLs externas
+```
+
+`new URL(base-relativo, origin)` **ignora** el `origin` cuando el primer argumento es una URL absoluta o
+protocol-relative. Verificado con Node:
+
+```
+"/dashboard"              -> http://localhost:3001/dashboard   (interno, OK)
+"https://evil.example"    -> https://evil.example/             (externo)
+"//evil.example"          -> http://evil.example/              (externo, protocol-relative)
+```
+
+### Precondiciones
+
+- Ninguna. El atacante solo arma un enlace con `callbackUrl` apuntando a su dominio.
+
+### Pasos reproducibles
+
+```bash
+# Callback OAuth/magic-link: tras intercambiar el code, redirige a un dominio externo.
+curl -si "http://localhost:3001/auth/callback?code=<code-valido>&callbackUrl=https://evil.example/phish" \
+  | grep -i '^location:'
+# → location: https://evil.example/phish
+
+# Login: el formulario envía callbackUrl; al autenticar, redirect() sale del sitio.
+# Enlace de phishing típico: /auth/login?callbackUrl=https://evil.example/phish
+```
+
+### Resultado esperado vs. obtenido
+
+| | Esperado (diseño) | Obtenido |
+|---|---|---|
+| Destino permitido | Solo rutas internas (`/...`) | Cualquier dominio externo |
+
+### Impacto
+
+Phishing con la confianza del dominio del hotel: el usuario inicia sesión en el sitio real y es enviado a
+un clon del atacante. También facilita el robo de `code`/tokens si se encadena con el flujo OAuth.
+
+### Evidencia
+
+- `evidencias/AUTH-POC-5-open-redirect.txt` — `curl -i` mostrando el `Location:` externo (pendiente de entorno).
+
+### Remediación (Fase 3 → P3.3)
+
+- Validar `callbackUrl` contra una **allow-list de rutas internas** (debe empezar por `/` y no ser
+  protocol-relative `//`), o resolverlo siempre como ruta relativa descartando esquema y host. Añadir un
+  helper `resolveSafeCallbackUrl` con test de regresión.
+
+---
+
+## AUTH-POC-6 — Log injection / audit poisoning en eventos de login (real)
+
+| Campo | Valor |
+|---|---|
+| ID | AUTH-POC-6 |
+| Vector | 3 — manipulación de entrada |
+| OWASP | A09:2021 Security Logging & Monitoring Failures + A03 (log injection) |
+| NIST CSF 2.0 | DE.CM-01, DE.AE-02/03, PR.PS-04 |
+| Origen del hallazgo | **Real** (confirma O-08 de la Fase 1; se solapa con AU-R04 de Fabian) |
+| Componente / archivo:línea | `packages/core/src/auth/server/loginAction.ts:93-99` y `apps/panel-admin/src/features/auth/services/loginAction.ts:25-31,48-67` (fuente); sink en `logAuditEvent` + IP en `getAuditRequestContext.ts:35-37` |
+
+### Descripción
+
+Un atacante **sin sesión** puede escribir contenido arbitrario en el rastro de auditoría: los `loginAction`
+registran el `email` tecleado y el mensaje de error del proveedor **sin normalizar**, y la IP se toma de
+`x-forwarded-for`, cabecera controlable por el cliente:
+
+```ts
+// panel-admin/.../loginAction.ts:25
+await logAuditEvent({
+  actorEmail: email,                                   // ← entrada cruda del atacante
+  action: AUDIT_ACTIONS.AUTH_LOGIN_FAILED,
+  metadata: { email, reason: error?.message ?? "…" },  // ← email + error sin sanear
+  ipAddress,                                            // ← x-forwarded-for (spoofable)
+  userAgent,
+});
+```
+
+El `insert` a `audit_logs` es parametrizado (no hay SQLi), pero `actor_email` es texto libre: un `email`
+con saltos de línea / caracteres de control o contenido engañoso contamina el visor y los exports del log
+(audit poisoning), y la IP registrada es falsificable. No requiere autenticación: basta enviar intentos de
+login.
+
+### Precondiciones
+
+- Ninguna. El endpoint de login es público y registra cada intento fallido.
+
+### Pasos reproducibles
+
+```bash
+# Email con CRLF + línea forjada e IP spoofeada; se registra como actor_email/metadata e ip_address.
+curl -s -X POST http://localhost:3002/auth/login \
+  -H "X-Forwarded-For: 10.0.0.1" \
+  --data-urlencode $'email=victima@hotel.com\n[SYSTEM] LOGIN_SUCCESS actor=owner@hotel.com' \
+  --data-urlencode 'password=x'
+# Luego, en el visor de auditoría / export, la entrada aparece con la línea forjada y la IP falsa.
+```
+
+### Resultado esperado vs. obtenido
+
+| | Esperado (diseño) | Obtenido |
+|---|---|---|
+| Contenido del log | Campos normalizados, IP confiable | Texto arbitrario del atacante + IP spoofeada |
+
+### Impacto
+
+Contaminación del rastro de auditoría (encubrir o incriminar), ruptura de la trazabilidad (DE.AE) y base
+para el XSS stored que Fabian demuestra en su visor (AU-R01). Degrada la capacidad de detección del sistema.
+
+### Evidencia
+
+- `evidencias/AUTH-POC-6-log-injection.txt` — request + fila resultante en `audit_logs` (pendiente de entorno).
+
+### Remediación (Fase 3 → P3.3 + P3.4, coordinado con Fabian)
+
+- **Lado auth (P3.3/P3.4):** validar/normalizar el `email` (Zod + strip de caracteres de control) antes de
+  pasarlo a `logAuditEvent`; no registrar el `error.message` crudo del proveedor.
+- **Lado auditoría (Fabian, F3.3):** normalizar en el sink y derivar la IP de una fuente confiable, no de
+  `x-forwarded-for` directo. Coordinar porque `logAuditEvent`/`getAuditRequestContext` son API compartida (§4.4).
+
+---
+
 ## Coordinación
 
 - **AUTH-POC-1** comparte causa raíz con el módulo de Gestión de Usuarios (Joseph): `user_roles` y el
@@ -389,5 +534,10 @@ sesión / acciones en nombre de la víctima. Es la versión "con dientes" de O-0
   P3.1 es hermano de A3.1 (Operaciones) y F3.1 (Auditoría).
 - **AUTH-POC-4** calca OP-POC-3 (Aarón) y el real `AuditLogDetailDrawer.tsx` (Fabian). El fix P3.2 incluye
   **CSP global** (archivo compartido, §4.4) — avisar al equipo antes de tocar `next.config`/`middleware`.
-- Pendiente P2.3 (V3: CSRF / open redirect O-03 + manipulación de parámetros + log injection O-08, este
-  último coordinado con Fabian).
+- **AUTH-POC-6** se solapa con AU-R04 de Fabian; el fix se reparte (normalizar en origen P3.3/P3.4 y en el
+  sink F3.3). `logAuditEvent` / `getAuditRequestContext` son API compartida (§4.4).
+- **CSRF:** evaluado y **sin hallazgo** — los Server Actions de Next (login, registro, activación) validan
+  el `Origin` contra el `Host` por defecto, y el callback es GET y exige un `code` válido. Se documenta como
+  control presente, no como vulnerabilidad.
+- Las tres pruebas de concepto de los vectores están completas (P2.1–P2.3). Falta **P2.4**: capturas en vivo
+  (AUTH-POC-1…6, requieren Supabase/navegador) y el PR de la rama a `develop`.
