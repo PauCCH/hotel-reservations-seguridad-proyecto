@@ -1,0 +1,17 @@
+############ OP-POC-5 — Manipulacion de parametros del checkout (BD LOCAL) ############
+# (a) Fecha 2020 (pasado) + aforo 99 en mv-1 (cap 2):
+HTTP/1.1 200 OK
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+content-type: application/json
+Date: Tue, 20 Oct 2026 21:11:07 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+Transfer-Encoding: chunked
+
+{"url":"http://localhost:3001/reserve/success?session_id=mock_1792530667281"}
+# HALLAZGO: 200 sin validar fecha pasada ni aforo vs capacidad (ninguna regla de negocio server-side).
+
+# NOTA (persistencia): el checkout responde 200 pero NO llega a persistir la fila,
+# por un bug aparte: persistReservation inserta room_id = id de mockRooms ("mv-1", string)
+# en reservations.room_id, que es uuid NOT NULL con FK a rooms(id). El error se traga.
+# El hallazgo de OP-POC-4/5 es la ACEPTACION del request sin defensa/validacion (HTTP 200).
