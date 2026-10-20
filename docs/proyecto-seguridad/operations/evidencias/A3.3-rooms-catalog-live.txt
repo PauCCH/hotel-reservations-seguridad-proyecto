@@ -1,0 +1,58 @@
+### Fecha: 2026-10-20T16:52:05-06:00  rama: security/operations/fase3-checkout-rooms-catalog@191ad4e (+ cambios sin commit)
+### Limpieza de corridas previas
+DELETE 5
+
+### 1. Checkout legítimo mv-1 2027-05-08→2027-05-10: espera 200 y la fila persiste
+200 {"url":"http://localhost:3001/reserve/success?session_id=mock_1792536726139"}
+filas mv-1: 1
+RES-023|0a330000-0000-4000-8000-000000000101|2027-05-08|2027-05-10|145.00|290.00
+
+### 2. Mismo cuarto, fechas solapadas 2027-05-09→2027-05-11: espera 409 (areRoomsAvailable)
+409 {"error":"room_unavailable"}
+filas mv-1: 1
+
+### 3. Estadía consecutiva 2027-05-10→2027-05-12 (check-in = check-out anterior): espera 200 ('[)' semiabierto)
+200 {"url":"http://localhost:3001/reserve/success?session_id=mock_1792536727696"}
+filas mv-1: 2
+
+### 4. Carrera TOCTOU: 5 checkouts EN PARALELO mv-2 2027-05-18→2027-05-20: espera exactamente 1 fila
+  req 1: 200 {"url":"http://localhost:3001/reserve/success?session_id=mock_1792536728403"}
+  req 2: 409 {"error":"room_unavailable"}
+  req 3: 409 {"error":"room_unavailable"}
+  req 4: 409 {"error":"room_unavailable"}
+  req 5: 409 {"error":"room_unavailable"}
+filas mv-2: 1
+
+### 5. INSERT directo solapado (salta la app): espera 23P01 de reservations_no_overlap
+ERROR:  23P01: conflicting key value violates exclusion constraint "reservations_no_overlap"
+DETAIL:  Key (room_id, daterange(check_in, check_out, '[)'::text))=(0a330000-0000-4000-8000-000000000101, [2027-05-08,2027-05-09)) conflicts with existing key (room_id, daterange(check_in, check_out, '[)'::text))=(0a330000-0000-4000-8000-000000000101, [2027-05-08,2027-05-10)).
+SCHEMA NAME:  public
+
+### 6. Multi-habitación [lf-1, lf-2] 2027-05-28→2027-05-30: espera 200 y 2 filas
+200 {"url":"http://localhost:3001/reserve/success?session_id=mock_1792536729827"}
+filas lf-1: 1  lf-2: 1
+
+### 7. Multi-habitación [lf-3, lf-2] solapando lf-2: espera 409 y lf-3 SIN fila (atómico)
+409 {"error":"room_unavailable"}
+filas lf-3: 0  lf-2: 1
+
+### 8. Habitación desconocida: espera 400
+400 {"error":"invalid_request"}
+
+### 9. Regresión OP-POC-5: fecha pasada (2020) y aforo 99 en mv-1 (cap 2): espera 400 y 400
+400 {"error":"invalid_request"}
+400 {"error":"invalid_request"}
+
+### 10. Regresión OP-POC-4: Origin ajeno: espera 403
+403
+
+### Notas de alcance (honestidad de la evidencia)
+# - Entorno: Supabase LOCAL (supabase start + `supabase migration up --local`, que aplicó
+#   20261018000002_reservations_no_overlap y 20261020000001_seed_portal_catalog_rooms). Portal :3001.
+# - Prueba 4: HTTP no distingue si cada 409 vino de areRoomsAvailable o del EXCLUDE (23P01 → 409);
+#   lo verificable es el invariante: 5 requests concurrentes → exactamente 1 fila.
+# - Prueba 5 demuestra la restricción de BD de forma independiente de la app (ya no es código muerto).
+# - Prueba 7 la rechaza el chequeo de la app; la atomicidad del insert multi-habitación la garantiza
+#   Postgres (una sola sentencia INSERT con varias filas).
+# - Límite conocido: cada habitación del catálogo es UNA unidad en BD (el `inventory` del mock no se modela).
+# Script: verify.sh (bash + curl + psql vía docker exec).

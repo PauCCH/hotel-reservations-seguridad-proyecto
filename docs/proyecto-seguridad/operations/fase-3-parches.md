@@ -20,7 +20,7 @@
 | OP-POC-2 | 1 — control de acceso | `requirePermission(ROOMS.MANAGE)` | **Bajo** |
 | OP-POC-3 | 2 — XSS stored | Escape de salida (`{guest.notes}`) | **Bajo** |
 | OP-POC-4 | 3 — CSRF | Verificación de `Origin` | **Medio** (sin token anti-CSRF ni rate limiting) |
-| OP-POC-5 | 3 — manipulación de parámetros | Esquema Zod + capacidad (fechas/aforo); disponibilidad + `EXCLUDE` | Fechas/aforo **Bajo** (verificado); disponibilidad/TOCTOU **⚠️ no verificado** — control inalcanzable por `room_id` mock vs `uuid` (ver A3.3) |
+| OP-POC-5 | 3 — manipulación de parámetros | Esquema Zod + capacidad (fechas/aforo); disponibilidad + `EXCLUDE` + catálogo de rooms reconciliado | **Bajo** (fechas/aforo y disponibilidad/TOCTOU verificados en vivo, ver A3.3) |
 | OP-POC-6 | 3 — log injection | — (A3.4 pendiente) | **Alto** (sin remediar: operaciones aún no registra ni sanea logs) |
 
 ---
@@ -181,10 +181,11 @@ if (!(await areRoomsAvailable(input.roomIds, input.checkIn, input.checkOut)))
 **Prueba de regresión.** `checkoutSchema.test.ts` (5 casos): acepta reserva futura válida; rechaza check-in en
 el pasado, rango invertido, `guests = 0` y lista de habitaciones vacía. En verde (5/5). El **precio** ya se
 recalculaba server-side desde el catálogo (no era manipulable), por lo que ese sub-vector no requería parche.
-⚠️ El test cubre **solo el esquema Zod**; el camino de disponibilidad (`areRoomsAvailable`) y la restricción
-`EXCLUDE` **no tienen cobertura automatizada** y, como se explica abajo, hoy no son ejecutables end-to-end.
+El test cubre el esquema Zod; el camino de disponibilidad (`areRoomsAvailable`) y la restricción `EXCLUDE`
+se verifican en vivo contra la BD (ver "Reconciliación del catálogo" abajo), y `room-catalog.test.ts`
+mantiene sincronizado el mapa catálogo → uuid.
 
-**Riesgo residual (desglosado, verificado 2026-10-20 en Supabase local):**
+**Riesgo residual (historial — primera verificación, 2026-10-20 en Supabase local, antes de `ce54581`):**
 - **Fechas / aforo → Bajo (verificado).** El esquema Zod (fechas futuras, `check_out > check_in`, `guests ≥ 1`)
   y la validación de capacidad (`guests ≤ Σ room.capacity`, sobre `mockRooms` en memoria) corren antes de
   cualquier acceso a BD y rechazan la PoC con `400`. El precio sigue recalculado server-side.
@@ -199,12 +200,60 @@ recalculaba server-side desde el catálogo (no era manipulable), por lo que ese 
   (siempre `409`). La afirmación anterior de "TOCTOU cerrado a nivel DB / Bajo" **no está sustentada** hasta
   reconciliar el modelo de habitaciones.
 
-> **Follow-up (post-entrega):** hacer que el checkout resuelva las habitaciones desde la tabla `rooms` (uuid)
-> en vez de `mockRooms` **(opción A)**, o cambiar `reservations.room_id` a `text` y ajustar el índice gist del
-> `EXCLUDE` **(opción B)**. Recién con eso `persistReservation`, `areRoomsAvailable` y la constraint `EXCLUDE`
-> se ejecutan y se pueden testear (incluida una prueba de doble-booking concurrente). La migración
-> `20261018000002_reservations_no_overlap.sql` y `areRoomsAvailable` quedan en su lugar, listas para cuando el
-> `room_id` persistido sea un uuid válido.
+### Reconciliación del catálogo de habitaciones (cierra el "no verificado")
+
+**Ficha.** Rama: `security/operations/fase3-checkout-rooms-catalog` · Commit: `ce54581`.
+
+**Decisión.** Opción A: enlazar el catálogo del portal con filas reales de `rooms`. Se descartó la opción B
+(`reservations.room_id` → `text`) porque eliminaba la FK a `rooms`: debilitaba la integridad referencial para
+tapar un bug.
+
+**Diff (resumen).**
+```ts
+// Migración 20261020000001_seed_portal_catalog_rooms.sql: las 8 habitaciones del catálogo en public.rooms
+// con uuid FIJO (Family → Deluxe, Villa → Suite por el CHECK de category), idempotente (ON CONFLICT DO NOTHING).
+
+// constants/room-catalog.ts — mapa server-side catálogo → uuid
+export const ROOM_DB_ID = { "mv-1": "0a330000-…-000000000101", /* … 8 entradas */ };
+
+// gateway.server.ts
+const roomDbIds = toRoomDbIds(input.roomIds);          // id desconocido → 400
+if (!(await areRoomsAvailable(roomDbIds, …)))           // ANTES: input.roomIds ("mv-1") → 22P02 → 409 siempre
+const persisted = await persistReservation(input, rooms, roomDbIds, nights);
+
+// createReservation.server.ts — ANTES: un solo insert con room_id = rooms[0].id ("mv-1")
+// DESPUÉS: una fila por habitación en UNA sentencia → el EXCLUDE protege todas, no solo la primera,
+// y un conflicto en cualquiera revierte la reserva completa.
+supabase.from(RESERVATIONS).insert(rooms.map((room, i) => ({ room_id: roomDbIds[i], … })));
+```
+
+**Prueba de regresión (en vivo, Supabase local, 2026-10-20)** — `evidencias/A3.3-rooms-catalog-live.txt`:
+
+| # | Caso | Esperado | Obtenido |
+|---|---|---|---|
+| 1 | Checkout legítimo `mv-1` | 200 + fila persistida | ✅ 200, `RES-0xx` con `room_id` uuid |
+| 2 | Mismo cuarto, fechas solapadas | 409 | ✅ 409 |
+| 3 | Estadía consecutiva (check-in = check-out previo) | 200 | ✅ 200 (`daterange '[)'`) |
+| 4 | **Carrera TOCTOU:** 5 checkouts en paralelo | 1 fila | ✅ 1×200 + 4×409, 1 fila |
+| 5 | INSERT directo solapado (salta la app) | `23P01` | ✅ `reservations_no_overlap` dispara |
+| 6 | Multi-habitación `[lf-1, lf-2]` | 200 + 2 filas | ✅ |
+| 7 | Multi-habitación solapando `lf-2` | 409, sin fila parcial | ✅ `lf-3` sin fila |
+| 8 | Habitación desconocida | 400 | ✅ |
+| 9 | Regresión: fecha 2020 / aforo 99 | 400 / 400 | ✅ |
+| 10 | Regresión OP-POC-4: `Origin` ajeno | 403 | ✅ |
+
+Automatizado: `room-catalog.test.ts` (3 casos: todo el catálogo mapeado a uuid válido y único, orden,
+id desconocido → `null`). En verde junto a `checkoutSchema.test.ts` (8/8).
+
+**Riesgo residual de OP-POC-5: Bajo.** Fechas, aforo y disponibilidad se validan server-side, y la
+exclusión a nivel de BD (`EXCLUDE`) es la autoridad final ante la carrera TOCTOU: con la app saltada
+(caso 5) la BD sigue rechazando el doble-booking. **Límites declarados:**
+- En el caso 4, HTTP no distingue si cada 409 vino de la app o del `EXCLUDE`. Lo que se verifica es el invariante
+  (1 sola fila), y el caso 5 prueba la restricción por separado.
+- Cada habitación del catálogo es **una unidad** en BD. El `inventory` del mock (ej. 8 cabañas `mv-1`) no se
+  modela; es una decisión de producto, no de seguridad.
+- El catálogo del portal sigue siendo estático. El mapa y la migración deben mantenerse sincronizados; el test
+  cubre el lado del portal.
 
 ---
 

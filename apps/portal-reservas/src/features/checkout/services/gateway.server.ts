@@ -20,6 +20,7 @@ import {
   STRIPE,
   STRIPE_SESSION_PLACEHOLDER,
 } from "../constants/checkout.constants";
+import { toRoomDbIds } from "../constants/room-catalog";
 import { checkoutPayloadSchema } from "../domain/checkoutSchema";
 import { computeNights } from "../domain/reservation";
 import { buildStripeCheckoutParams } from "../domain/stripe";
@@ -44,7 +45,9 @@ export async function openGatewaySession(payload: CheckoutSessionPayload): Promi
   const input = parsed.data;
 
   const rooms = findRoomsByIds(input.roomIds);
-  if (rooms.length !== input.roomIds.length) {
+  // Catalog ids ("mv-1") → public.rooms uuids; the DB only understands the latter.
+  const roomDbIds = toRoomDbIds(input.roomIds);
+  if (rooms.length !== input.roomIds.length || !roomDbIds) {
     return {
       status: CHECKOUT_HTTP_STATUS.BAD_REQUEST,
       body: { error: CHECKOUT_API_ERROR.INVALID_REQUEST },
@@ -61,7 +64,7 @@ export async function openGatewaySession(payload: CheckoutSessionPayload): Promi
   }
 
   // Availability: reject overlapping bookings for any of the rooms.
-  if (!(await areRoomsAvailable(input.roomIds, input.checkIn, input.checkOut))) {
+  if (!(await areRoomsAvailable(roomDbIds, input.checkIn, input.checkOut))) {
     return {
       status: CHECKOUT_HTTP_STATUS.CONFLICT,
       body: { error: CHECKOUT_API_ERROR.UNAVAILABLE },
@@ -74,7 +77,7 @@ export async function openGatewaySession(payload: CheckoutSessionPayload): Promi
   // the demo was missing). The DB-level EXCLUDE constraint is authoritative for
   // availability (closes the TOCTOU race): a concurrent overlapping insert
   // fails here even if it passed areRoomsAvailable above.
-  const persisted = await persistReservation(input, rooms, nights);
+  const persisted = await persistReservation(input, rooms, roomDbIds, nights);
   if (!persisted.ok) {
     return persisted.reason === "conflict"
       ? { status: CHECKOUT_HTTP_STATUS.CONFLICT, body: { error: CHECKOUT_API_ERROR.UNAVAILABLE } }
