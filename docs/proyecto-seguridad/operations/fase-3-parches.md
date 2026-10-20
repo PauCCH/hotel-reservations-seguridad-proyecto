@@ -20,7 +20,7 @@
 | OP-POC-2 | 1 — control de acceso | `requirePermission(ROOMS.MANAGE)` | **Bajo** |
 | OP-POC-3 | 2 — XSS stored | Escape de salida (`{guest.notes}`) | **Bajo** |
 | OP-POC-4 | 3 — CSRF | Verificación de `Origin` | **Medio** (sin token anti-CSRF ni rate limiting) |
-| OP-POC-5 | 3 — manipulación de parámetros | Esquema Zod + capacidad + disponibilidad + restricción `EXCLUDE` | **Bajo** (TOCTOU cerrado a nivel DB) |
+| OP-POC-5 | 3 — manipulación de parámetros | Esquema Zod + capacidad (fechas/aforo); disponibilidad + `EXCLUDE` | Fechas/aforo **Bajo** (verificado); disponibilidad/TOCTOU **⚠️ no verificado** — control inalcanzable por `room_id` mock vs `uuid` (ver A3.3) |
 | OP-POC-6 | 3 — log injection | — (A3.4 pendiente) | **Alto** (sin remediar: operaciones aún no registra ni sanea logs) |
 
 ---
@@ -181,15 +181,30 @@ if (!(await areRoomsAvailable(input.roomIds, input.checkIn, input.checkOut)))
 **Prueba de regresión.** `checkoutSchema.test.ts` (5 casos): acepta reserva futura válida; rechaza check-in en
 el pasado, rango invertido, `guests = 0` y lista de habitaciones vacía. En verde (5/5). El **precio** ya se
 recalculaba server-side desde el catálogo (no era manipulable), por lo que ese sub-vector no requería parche.
+⚠️ El test cubre **solo el esquema Zod**; el camino de disponibilidad (`areRoomsAvailable`) y la restricción
+`EXCLUDE` **no tienen cobertura automatizada** y, como se explica abajo, hoy no son ejecutables end-to-end.
 
-**Riesgo residual: Bajo.** Las reglas de negocio quedan validadas en el servidor y la condición de carrera
-**TOCTOU** entre el chequeo de disponibilidad y la inserción quedó **cerrada a nivel de base de datos** con
-la restricción `reservations_no_overlap` (migración `20261018000002_reservations_no_overlap.sql`:
-`EXCLUDE USING gist (room_id WITH =, daterange(check_in, check_out, '[)') WITH &&) WHERE status <> 'cancelled'`).
-El chequeo aplicativo `areRoomsAvailable` se mantiene por UX (respuesta temprana), pero el `EXCLUDE` es la
-garantía autoritativa: dos inserciones concurrentes solapadas no pueden coexistir y la segunda recibe
-`409`. Requiere la extensión `btree_gist` (incluida en la migración). Estadías contiguas (check-out = próximo
-check-in) siguen permitidas por el rango semiabierto.
+**Riesgo residual (desglosado, verificado 2026-10-20 en Supabase local):**
+- **Fechas / aforo → Bajo (verificado).** El esquema Zod (fechas futuras, `check_out > check_in`, `guests ≥ 1`)
+  y la validación de capacidad (`guests ≤ Σ room.capacity`, sobre `mockRooms` en memoria) corren antes de
+  cualquier acceso a BD y rechazan la PoC con `400`. El precio sigue recalculado server-side.
+- **Disponibilidad / overbooking / TOCTOU → ⚠️ No verificado (control inalcanzable).** `areRoomsAvailable`
+  ejecuta `.in("room_id", ["mv-1"])` y `persistReservation` inserta `room_id = "mv-1"` (id de `mockRooms`),
+  **pero `reservations.room_id` es `uuid NOT NULL` con FK a `rooms`**. Resultado real (reproducido): ambas
+  consultas fallan con **`22P02` (invalid input syntax for type uuid)**. Como `areRoomsAvailable` hace
+  *fail-closed*, **todo checkout responde `409`**, y el insert nunca alcanza el `EXCLUDE`, por lo que la
+  violación `23P01` que cierra el TOCTOU **nunca se dispara**. Es decir: la restricción `reservations_no_overlap`
+  está creada pero es **código muerto** mientras el portal reserve contra el catálogo `mockRooms` (ids string)
+  en vez de la tabla `rooms` (ids uuid). Efecto colateral: **el checkout queda roto para toda reserva legítima**
+  (siempre `409`). La afirmación anterior de "TOCTOU cerrado a nivel DB / Bajo" **no está sustentada** hasta
+  reconciliar el modelo de habitaciones.
+
+> **Follow-up (post-entrega):** hacer que el checkout resuelva las habitaciones desde la tabla `rooms` (uuid)
+> en vez de `mockRooms` **(opción A)**, o cambiar `reservations.room_id` a `text` y ajustar el índice gist del
+> `EXCLUDE` **(opción B)**. Recién con eso `persistReservation`, `areRoomsAvailable` y la constraint `EXCLUDE`
+> se ejecutan y se pueden testear (incluida una prueba de doble-booking concurrente). La migración
+> `20261018000002_reservations_no_overlap.sql` y `areRoomsAvailable` quedan en su lugar, listas para cuando el
+> `room_id` persistido sea un uuid válido.
 
 ---
 
