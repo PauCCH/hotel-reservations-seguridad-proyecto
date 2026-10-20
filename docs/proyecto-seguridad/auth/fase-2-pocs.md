@@ -367,7 +367,9 @@ sesión / acciones en nombre de la víctima. Es la versión "con dientes" de O-0
 ### Evidencia
 
 - `evidencias/AUTH-POC-4-vitest.txt` — salida del test de regresión (3/3).
-- `evidencias/AUTH-POC-4-xss-alert.png` — `alert(document.cookie)` ejecutándose (reproducción en vivo, pendiente).
+- `evidencias/AUTH-POC-4-xss-reflected.jpg` — **captura en vivo**: el `<img onerror>` inyectado vía
+  `error_description` se ejecuta sobre la página real `/auth/error` (banner rojo "XSS EJECUTADO" + lectura
+  de `document.cookie`). El ícono de imagen rota en la tarjeta es el `<img src=x>` que dispara el `onerror`.
 
 ### Remediación (Fase 3 → P3.2)
 
