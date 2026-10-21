@@ -1,15 +1,17 @@
-"use server";
-
 /**
  * @fileoverview Server-side audit event writer.
  *
  * Records one row in `audit_logs` via the service-role Supabase client.
+ * Deliberately NOT a Server Action (no "use server"): that would expose it as a
+ * public HTTP endpoint any client could use to forge audit events. Import it
+ * only from server code via `@hotel/core/audit/server`.
  * Never throws into the caller — a failed audit write must not break the
  * flow that triggered it (e.g. login).
  *
  * @example
  * ```ts
- * import { AUDIT_ACTIONS, logAuditEvent } from "@hotel/core/audit";
+ * import { AUDIT_ACTIONS } from "@hotel/core/audit";
+ * import { logAuditEvent } from "@hotel/core/audit/server";
  *
  * await logAuditEvent({
  *   actorId: user.id,

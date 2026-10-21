@@ -1,5 +1,3 @@
-"use server";
-
 /**
  * @fileoverview Extracts the client IP and user-agent from the incoming
  * request headers, for attaching to audit events.
@@ -9,7 +7,8 @@
  *
  * @example
  * ```ts
- * import { getAuditRequestContext, logAuditEvent } from "@hotel/core/audit";
+ * import { AUDIT_ACTIONS } from "@hotel/core/audit";
+ * import { getAuditRequestContext, logAuditEvent } from "@hotel/core/audit/server";
  *
  * const { ipAddress, userAgent } = await getAuditRequestContext();
  * await logAuditEvent({ action: AUDIT_ACTIONS.AUTH_LOGIN_SUCCESS, ipAddress, userAgent });

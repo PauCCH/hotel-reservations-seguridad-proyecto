@@ -1,11 +1,7 @@
 "use server";
 
-import {
-  AUDIT_ACTIONS,
-  AUDIT_ENTITIES,
-  getAuditRequestContext,
-  logAuditEvent,
-} from "@hotel/core/audit";
+import { AUDIT_ACTIONS, AUDIT_ENTITIES } from "@hotel/core/audit";
+import { getAuditRequestContext, logAuditEvent } from "@hotel/core/audit/server";
 import { verifyAdminRole } from "@hotel/core/auth";
 import { createSupabaseServerClient, createSupabaseServiceClient, DB_TABLES } from "@hotel/db";
 import type { AuditLogEntry } from "@hotel/db/types";

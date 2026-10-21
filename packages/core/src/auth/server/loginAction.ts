@@ -23,7 +23,8 @@ import { createSupabaseServerClient } from "@hotel/db";
 import type { Session } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { AUDIT_ACTIONS, getAuditRequestContext, logAuditEvent } from "../../audit";
+import { AUDIT_ACTIONS } from "../../audit";
+import { getAuditRequestContext, logAuditEvent } from "../../audit/server";
 import { verifyAdminRole } from "../index";
 import type { AdminProfile, ClientProfile, LoginResult } from "../shared/types";
 

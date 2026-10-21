@@ -20,6 +20,9 @@ vi.mock("@hotel/core/audit", () => ({
     AUDIT_LOG_VIEWED: "audit.log.viewed",
   },
   AUDIT_ENTITIES: { AUDIT_LOGS: "audit_logs" },
+}));
+
+vi.mock("@hotel/core/audit/server", () => ({
   getAuditRequestContext: vi.fn(() => Promise.resolve({ ipAddress: null, userAgent: null })),
   logAuditEvent: vi.fn(() => Promise.resolve()),
 }));
