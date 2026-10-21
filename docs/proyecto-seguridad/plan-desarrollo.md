@@ -69,7 +69,7 @@ _Última actualización: 2026-10-21_
 
 | Integrante | Módulo | Fase actual | Próxima tarea | Rama activa | Bloqueos |
 |---|---|---|---|---|---|
-| Paula | Autenticación | 3 — Remediación | P3.1 Parches del vector 1 (AUTH-POC-1/2/3) | `security/auth/fase3-parches` | — (API de auditoría de Fabian ya en `develop`, PR #18: P3.4 desbloqueada) |
+| Paula | Autenticación | 3 — Remediación | P3.1 re-test en vivo de AUTH-POC-1/2 (Supabase local) → luego P3.2 | `security/auth/fase3-parches` | — (API de auditoría de Fabian ya en `develop`, PR #18: P3.4 desbloqueada). Avisar a Joseph (`requirePermission`, invitaciones) y Aarón (RLS de `rooms`) |
 | Joseph | Gestión de Usuarios | 2 — Evaluación ofensiva | J2.1 Vector 1 — servidor (A03 + A01) | — | — |
 | Aarón | Operaciones / Transacciones | 3 — Remediación | Revisión cruzada de PR #16 (G3.3) + A3.7 (video). A3.4 bloqueada | `security/operations/fase3-checkout-rooms-catalog` (PR #16) | A3.4 bloqueada por la util de saneo de Fabian (F3.3/F3.4) |
 | Fabian | Logs / Auditoría | 2 — cerrada, pendiente G2 | Esperar G2 (consolidación del doc de PoCs) hasta que Paula/Joseph/Aarón cierren P2.4/J2.4/A2.4; mientras, puede adelantar Fase 3 (F3.1) | `security/audit/fase2-pocs` | G2 depende de los otros 3 módulos |
@@ -241,6 +241,7 @@ mensajes de error que permiten enumerar usuarios, reflejo de parámetros en pág
 | 2026-10-19 | P2.3 Vector 3: AUTH-POC-5 (open redirect vía `callbackUrl`, real, O-03) y AUTH-POC-6 (log injection / audit poisoning + IP spoofing en login, real, O-08, solapa AU-R04). CSRF evaluado sin hallazgo (Server Actions validan Origin) | `security/auth/fase2-pocs` | Hecho; ambos reales (sin vuln introducida); capturas en vivo pendientes de entorno; fix P3.3/P3.4 coordinado con Fabian |
 | 2026-10-21 | P2.4 Entrega de la Fase 2 (6 PoCs + evidencias) | `security/auth/fase2-pocs`, PR #17 (merge `9c1d10d`) | Mergeado a `develop`; Fase 2 cerrada |
 | 2026-10-21 | Rama de Fase 3 creada desde `develop` (`91b169c`) | `security/auth/fase3-parches` | Publicada en `origin` |
+| 2026-10-21 | P3.1 (código) — AUTH-POC-1: `handle_new_user` ignora `raw_user_meta_data.role` (solo `app_metadata`, default `client`); invitaciones promovidas con `promote_invited_admin()` (solo `service_role`); `createAdminAccountAction` exige `admins:invite`; se elimina `sync_role_to_jwt`. AUTH-POC-2: RLS de `rooms`/`room_schedules`/`room_images` usan `is_admin_or_owner()`; lecturas de sesión en servidor vía `getVerifiedSession()` (`getUser()`). AUTH-POC-3: `lookupAccount` sin `.or()` (UUID + `.eq()`, nombre comparado en código) | `security/auth/fase3-parches`, commits `1ef0b61` (POC-1), `e1994f9` (POC-2), `b5e546b` (POC-3); migraciones `20261021000001`, `20261021000002` | Código hecho; tests en verde (core 71, portal 60, panel 19) y sin errores nuevos de type-check. Pendiente: aplicar migraciones en Supabase local y re-ejecutar AUTH-POC-1/2 en vivo, luego PR |
 
 ---
 
