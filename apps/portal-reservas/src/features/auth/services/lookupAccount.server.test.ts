@@ -61,6 +61,21 @@ describe("lookupAccount (AUTH-POC-3, fixed)", () => {
     expect(builder.or).not.toHaveBeenCalled();
   });
 
+  it("neutralizes the payload that dumped every profile live (valid UUID + OR clause)", async () => {
+    // Against the vulnerable .or() this returned all 7 local profiles
+    // (evidencias/P3.1-AUTH-POC-3-retest.txt). Now the name never reaches the query.
+    maybeSingleResult.data = null;
+
+    const result = await lookupAccount({
+      name: "zzz,is_active.eq.true,full_name.ilike.zzz",
+      accountId: "00000000-0000-0000-0000-000000000000",
+    });
+
+    expect(result).toEqual([]);
+    expect(builder.or).not.toHaveBeenCalled();
+    expect(builder.eq).toHaveBeenCalledWith("id", "00000000-0000-0000-0000-000000000000");
+  });
+
   it("rejects a non-UUID accountId carrying filter syntax before querying", async () => {
     const result = await lookupAccount({
       name: "Ada Lovelace",
