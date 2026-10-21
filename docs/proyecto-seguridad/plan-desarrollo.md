@@ -372,11 +372,11 @@ de hash) y cobertura de eventos de los otros módulos.
 - [x] F2.4 Entregar `audit/fase-2-pocs.md` + evidencias.
 
 **Fase 3**
-- [ ] F3.1 Parches del vector 1 (RLS append-only, filtros parametrizados).
-- [ ] F3.2 Parches del vector 2 (escape de salida en el visor).
-- [ ] F3.3 Parches del vector 3 (normalizar/sanitizar cabeceras y campos, origen de IP confiable, firma o hash encadenado).
-- [ ] F3.4 Guía de uso de la API de auditoría para los demás módulos.
-- [ ] F3.5 Tests de regresión + riesgo residual por hallazgo.
+- [x] F3.1 Parches del vector 1 (RLS append-only, filtros parametrizados).
+- [x] F3.2 Parches del vector 2 (escape de salida en el visor).
+- [x] F3.3 Parches del vector 3 (normalizar/sanitizar cabeceras y campos, origen de IP confiable, firma o hash encadenado).
+- [x] F3.4 Guía de uso de la API de auditoría para los demás módulos (`audit/guia-api-auditoria.md`).
+- [x] F3.5 Tests de regresión + riesgo residual por hallazgo.
 - [ ] F3.6 Entregar `audit/fase-3-parches.md`.
 - [ ] F3.7 Grabar video (≤ 5 min, solo IDE).
 
@@ -391,6 +391,7 @@ de hash) y cobertura de eventos de los otros módulos.
 | 2026-10-15 | F2.3 Vector 3 (audit poisoning, AUD-POC-5 + AUD-POC-6): reproducido en vivo con MCP de Playwright/Chromium — AUD-POC-5 falsifica `x-forwarded-for` (IP TEST-NET-3, sin validar) y AUD-POC-6 inyecta `\r\n` + texto fabricado (`action=audit.log.purged actor=owner@hotel.local`) vía el campo `email` del login, visible en la tabla y el drawer del visor real (capturas de pantalla). Es la cadena O4+O5/AU-R04 ya identificada en Fase 1 como riesgo Crítico (12). Los 3 vectores del enunciado tienen PoC real | `security/audit/fase2-pocs`, commit `dfed1d3` | Hecho; `audit/fase-2-pocs.md` + `audit/evidencias/F2.3-*.txt`/`.png` |
 | 2026-10-16 | Re-verificación F2.1/F2.2 con navegador real (Playwright+Chromium) en vez de solo curl, a pedido de Fabian; confirma ejecución real del XSS (no solo inspección de código) | `security/audit/fase2-pocs`, commit `235ed73` | Hecho |
 | 2026-10-16 | F2.4 Revisión de `audit/fase-2-pocs.md` contra la plantilla §4.5: las 6 PoCs completas (AUD-POC-3 como hallazgo de soporte, sin repro activo por diseño); push de la rama a `origin` y PR contra `develop` | `security/audit/fase2-pocs` | Hecho |
+| 2026-10-21 | F3.1–F3.5: 7 parches (AUD-PAT-1 a 7) con 65 tests en verde, re-prueba en navegador real de las PoCs 2, 4, 5 y 6 (la 1 sin re-probar: faltan credenciales de la cuenta sin `audit:view`; la 3 no es observable en vivo). **Hallazgo nuevo:** `logAuditEvent` era una Server Action pública (cualquier anónimo falsificaba eventos); corregido con `@hotel/core/audit/server`. Guía de la API publicada para P3.4/J3.4/A3.4. Las migraciones append-only y hash encadenado solo se probaron en Postgres local; **sin aplicar al Supabase remoto** | `security/audit/fase3-parches-v1`, commits `56c053c`…`9404908` | Hecho en la rama; pendiente PR, F3.6 (entrega) y F3.7 (video) |
 
 ---
 
