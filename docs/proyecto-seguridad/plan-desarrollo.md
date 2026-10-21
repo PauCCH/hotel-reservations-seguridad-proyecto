@@ -65,11 +65,11 @@ Cuando la persona se identifique:
 
 ## 2. Tablero de estado (actualizar siempre)
 
-_Última actualización: 2026-10-20_
+_Última actualización: 2026-10-21_
 
 | Integrante | Módulo | Fase actual | Próxima tarea | Rama activa | Bloqueos |
 |---|---|---|---|---|---|
-| Paula | Autenticación | 2 — Evaluación ofensiva | P2.1 Vector 1 — servidor (A03 + A01/JWT) | — | — |
+| Paula | Autenticación | 2 — Evaluación ofensiva | P2.4 Entregar `auth/fase-2-pocs.md` + evidencias (PR a `develop`) | `security/auth/fase2-pocs` | — (entorno Supabase local montado; capturas AUTH-POC-1/2/4/5/6 hechas) |
 | Joseph | Gestión de Usuarios | 2 — Evaluación ofensiva | J2.1 Vector 1 — servidor (A03 + A01) | — | — |
 | Aarón | Operaciones / Transacciones | 3 — Remediación | Revisión cruzada de PR #16 (G3.3) + A3.7 (video). A3.4 bloqueada | `security/operations/fase3-checkout-rooms-catalog` (PR #16) | A3.4 bloqueada por la util de saneo de Fabian (F3.3/F3.4) |
 | Fabian | Logs / Auditoría | 2 — cerrada, pendiente G2 | Esperar G2 (consolidación del doc de PoCs) hasta que Paula/Joseph/Aarón cierren P2.4/J2.4/A2.4; mientras, puede adelantar Fase 3 (F3.1) | `security/audit/fase2-pocs` | G2 depende de los otros 3 módulos |
@@ -209,9 +209,9 @@ mensajes de error que permiten enumerar usuarios, reflejo de parámetros en pág
 - [x] P1.5 Entregar `docs/proyecto-seguridad/auth/fase-1-diagnostico.md`.
 
 **Fase 2**
-- [ ] P2.1 Vector 1 — servidor: inyección (A03) y control de acceso / confianza en JWT (A01).
-- [ ] P2.2 Vector 2 — cliente: XSS reflected/stored en flujos de auth.
-- [ ] P2.3 Vector 3 — CSRF / manipulación de parámetros (A08) y log injection en eventos de login.
+- [x] P2.1 Vector 1 — servidor: inyección (A03) y control de acceso / confianza en JWT (A01).
+- [x] P2.2 Vector 2 — cliente: XSS reflected/stored en flujos de auth.
+- [x] P2.3 Vector 3 — CSRF / manipulación de parámetros (A08) y log injection en eventos de login.
 - [ ] P2.4 Entregar `auth/fase-2-pocs.md` + evidencias.
 
 **Fase 3**
@@ -233,6 +233,12 @@ mensajes de error que permiten enumerar usuarios, reflejo de parámetros en pág
 | 2026-10-03 | P1.3 Impacto: contexto GV.OC, apetito de riesgo, BIA por 5 procesos, misma escala I×P que Operaciones y Usuarios y 12 escenarios de riesgo inherente | `security/auth/fase1-diagnostico`, commit `60b6871` | Hecho; 1 Crítico (provisional, compartido con US-R01), 3 Altos, 5 Medios, 3 Bajos (§4) |
 | 2026-10-03 | P1.4 Línea base: 18 controles (15 PROTECT, 3 DETECT) con estado, brecha, tarea P3.x y coordinación; 7 filas listas para G1 y límites del análisis | `security/auth/fase1-diagnostico` | Hecho; 2 cumplen, 6 parciales, 10 no cumplen (§5–§8) |
 | 2026-10-05 | P1.5 Entrega de la Fase 1 | `security/auth/fase1-diagnostico`, PR #4 (merge `e41b2a2`) | Mergeado a `develop`; Fase 1 cerrada |
+| 2026-10-19 | Rama de Fase 2 creada desde `develop` | `security/auth/fase2-pocs` | Local (aún sin push) |
+| 2026-10-19 | P2.1 Vector 1: AUTH-POC-1 (A01 escalamiento de rol en signup, real, O-02), AUTH-POC-2 (A01 claim JWT en RLS + `getSession`, real, O-05/O-11), AUTH-POC-3 (A03 inyección en filtro PostgREST, **introducida** §4.1) | `security/auth/fase2-pocs` | Hecho; `auth/fase-2-pocs.md` + test de regresión `lookupAccount.server.test.ts` (2/2 en verde); evidencias en vivo pendientes de Supabase |
+| 2026-10-19 | P2.2 Vector 2: AUTH-POC-4 (XSS reflejado en `/auth/error` vía `error_description`, **introducida** §4.1, sobre la superficie real O-04) | `security/auth/fase2-pocs` | Hecho; sink `authErrorHtml.ts` + test `authErrorHtml.test.ts` (3/3 en verde) |
+| 2026-10-20 | P2.4 (parcial) — captura en vivo de AUTH-POC-4: XSS reflejado ejecutándose sobre `/auth/error` (navegador integrado, portal con `.env.local` placeholder) | `security/auth/fase2-pocs` | Hecho; `evidencias/AUTH-POC-4-xss-reflected.jpg`. Faltan capturas de POC-1/2/5/6 (requieren Supabase; sin Docker en la máquina) |
+| 2026-10-21 | P2.4 (capturas en vivo) — montado Supabase local (Docker) y capturadas AUTH-POC-1 (escalamiento de rol, Studio), AUTH-POC-2 (claims JWT + política RLS de `rooms`), AUTH-POC-6 (audit poisoning en `audit_logs`), AUTH-POC-5 (open redirect 303 → `example.com`) | `security/auth/fase2-pocs` | Hecho; evidencias en `auth/evidencias/`. CR/LF literal + spoofing de IP (`x-forwarded-for`) quedan a nivel HTTP (documentados). AUTH-POC-3: evidencia es el test de regresión |
+| 2026-10-19 | P2.3 Vector 3: AUTH-POC-5 (open redirect vía `callbackUrl`, real, O-03) y AUTH-POC-6 (log injection / audit poisoning + IP spoofing en login, real, O-08, solapa AU-R04). CSRF evaluado sin hallazgo (Server Actions validan Origin) | `security/auth/fase2-pocs` | Hecho; ambos reales (sin vuln introducida); capturas en vivo pendientes de entorno; fix P3.3/P3.4 coordinado con Fabian |
 
 ---
 

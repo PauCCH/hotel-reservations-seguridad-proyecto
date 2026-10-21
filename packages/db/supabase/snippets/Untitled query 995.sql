@@ -1,0 +1,1 @@
+select action, actor_email, ip_address, created_at from public.audit_logs order by created_at desc limit 3;

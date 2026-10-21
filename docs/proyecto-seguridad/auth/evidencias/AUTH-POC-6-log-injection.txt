@@ -1,0 +1,39 @@
+AUTH-POC-6 — Log injection / audit poisoning en eventos de login
+Entorno: Supabase local + panel-admin (:3002). Fecha: 2026-10-21.
+
+Ataque: intentos de login FALLIDOS desde el panel (sin sesión). loginAction del
+panel escribe el `email` tecleado (y la IP) en public.audit_logs SIN normalizar.
+
+========================================================================
+Filas resultantes en public.audit_logs (psql):
+========================================================================
+-- (A) Atribución forjada: un atacante que NO es el owner genera un evento
+--     atribuido a owner@hotel.local solo tecleando su email en el login.
+action      | auth.login.failed
+actor_email | owner@hotel.local
+ip_address  | ::1
+metadata    | {"email": "owner@hotel.local", "reason": "Invalid login credentials"}
+
+-- (B) Inyección de contenido libre: payload que simula un login exitoso del
+--     owner, almacenado TAL CUAL en actor_email y metadata (sin sanear).
+action      | auth.login.failed
+actor_email | victima@hotel.com2026-10-21 09:00:00  auth.login.success  actor=owner@hotel.local  ip=10.0.0.1  [FORJADO POR EL ATACANTE]
+ip_address  | ::1
+metadata    | {"email": "victima@hotel.com2026-10-21 09:00:00  auth.login.success  actor=owner@hotel.local  ip=10.0.0.1  [FORJADO POR EL ATACANTE]", "reason": "Invalid login credentials"}
+
+========================================================================
+NOTAS
+========================================================================
+- El <input type="email"> del navegador quita el salto de línea literal; por eso
+  el payload (B) quedó en una sola línea. Un cliente HTTP crudo (sin el navegador)
+  puede enviar CR/LF y caracteres de control, porque el sink (logAuditEvent) y el
+  origen (loginAction) NO normalizan el valor. La inyección de contenido libre y
+  la atribución forjada quedan demostradas igual.
+- IP: aquí aparece ::1 (localhost real). La IP se toma de `x-forwarded-for`
+  (getAuditRequestContext.ts:35-37), controlable por el cliente; el spoofing de IP
+  no se puede disparar desde el navegador (no deja fijar esa cabecera), requiere
+  cliente HTTP crudo. Queda documentado a nivel de código.
+
+RESULTADO: un atacante sin sesión contamina el rastro de auditoría (atribución y
+contenido forjados). Degrada DE.AE / trazabilidad. Fix P3.3 (normalizar en origen)
++ F3.3 de Fabian (normalizar en el sink, IP de fuente confiable).
