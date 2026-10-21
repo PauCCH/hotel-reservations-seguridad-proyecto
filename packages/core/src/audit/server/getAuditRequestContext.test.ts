@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockGet = vi.fn();
 
@@ -8,39 +8,61 @@ vi.mock("next/headers", () => ({
 
 import { getAuditRequestContext } from "./getAuditRequestContext";
 
+const withHeaders = (values: Record<string, string>) =>
+  mockGet.mockImplementation((name: string) => values[name] ?? null);
+
 describe("getAuditRequestContext", () => {
   beforeEach(() => {
     mockGet.mockReset();
+    vi.stubEnv("AUDIT_TRUSTED_PROXY_HOPS", "1");
   });
 
-  it("reads ip from x-forwarded-for and the user-agent header", async () => {
-    mockGet.mockImplementation((name: string) => {
-      if (name === "x-forwarded-for") return "203.0.113.5, 10.0.0.1";
-      if (name === "user-agent") return "Mozilla/5.0";
-      return null;
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("reads the IP the trusted proxy appended (rightmost), not the client-forged left entry", async () => {
+    withHeaders({
+      "x-forwarded-for": "203.0.113.99, 198.51.100.7",
+      "user-agent": "Mozilla/5.0",
     });
 
-    const result = await getAuditRequestContext();
-
-    expect(result).toEqual({ ipAddress: "203.0.113.5", userAgent: "Mozilla/5.0" });
+    expect(await getAuditRequestContext()).toEqual({
+      ipAddress: "198.51.100.7",
+      userAgent: "Mozilla/5.0",
+    });
   });
 
   it("falls back to x-real-ip when x-forwarded-for is absent", async () => {
-    mockGet.mockImplementation((name: string) => {
-      if (name === "x-real-ip") return "198.51.100.7";
-      return null;
-    });
+    withHeaders({ "x-real-ip": "198.51.100.7" });
 
-    const result = await getAuditRequestContext();
+    expect((await getAuditRequestContext()).ipAddress).toBe("198.51.100.7");
+  });
 
-    expect(result.ipAddress).toBe("198.51.100.7");
+  it("ignores forwarding headers when no proxy is trusted (default)", async () => {
+    vi.stubEnv("AUDIT_TRUSTED_PROXY_HOPS", "");
+    withHeaders({ "x-forwarded-for": "203.0.113.99", "x-real-ip": "203.0.113.98" });
+
+    expect((await getAuditRequestContext()).ipAddress).toBeNull();
+  });
+
+  it("drops a malformed forwarded value instead of storing it", async () => {
+    withHeaders({ "x-forwarded-for": "<img src=x onerror=alert(1)>" });
+
+    expect((await getAuditRequestContext()).ipAddress).toBeNull();
+  });
+
+  it("strips line breaks and control characters from the user-agent", async () => {
+    withHeaders({ "user-agent": "curl/8\r\n2026-01-01 action=audit.log.purged" });
+
+    expect((await getAuditRequestContext()).userAgent).toBe(
+      "curl/8  2026-01-01 action=audit.log.purged",
+    );
   });
 
   it("returns null ip and user-agent when no headers are present", async () => {
     mockGet.mockReturnValue(null);
 
-    const result = await getAuditRequestContext();
-
-    expect(result).toEqual({ ipAddress: null, userAgent: null });
+    expect(await getAuditRequestContext()).toEqual({ ipAddress: null, userAgent: null });
   });
 });

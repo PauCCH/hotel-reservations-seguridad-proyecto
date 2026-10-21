@@ -17,6 +17,7 @@
  */
 
 import { headers } from "next/headers";
+import { getTrustedProxyHops, resolveClientIp, sanitizeAuditText } from "../shared/sanitize";
 
 export interface AuditRequestContext {
   ipAddress: string | null;
@@ -26,18 +27,22 @@ export interface AuditRequestContext {
 /**
  * Reads the client IP and user-agent from request headers.
  *
- * `x-forwarded-for` may carry a comma-separated proxy chain — the first
- * entry is the original client — and falls back to `x-real-ip`.
+ * Forwarding headers are client-controlled, so they are only used when
+ * `AUDIT_TRUSTED_PROXY_HOPS` says how many proxies sit in front of the app;
+ * the IP is then taken from the proxy-appended end of `x-forwarded-for`
+ * (see `resolveClientIp`). The user-agent is stripped of control characters.
  */
 export async function getAuditRequestContext(): Promise<AuditRequestContext> {
   const headerList = await headers();
 
-  const forwardedFor = headerList.get("x-forwarded-for");
-  const firstForwarded = forwardedFor?.split(",")[0]?.trim();
-  const ipAddress = firstForwarded || headerList.get("x-real-ip");
+  const ipAddress = resolveClientIp(
+    headerList.get("x-forwarded-for"),
+    headerList.get("x-real-ip"),
+    getTrustedProxyHops(),
+  );
 
   return {
-    ipAddress: ipAddress ?? null,
-    userAgent: headerList.get("user-agent"),
+    ipAddress,
+    userAgent: sanitizeAuditText(headerList.get("user-agent")),
   };
 }
