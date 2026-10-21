@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getServerTranslations } from "@/locales/server";
 import { AuthErrorContent } from "./AuthErrorContent";
 import type { AuthErrorPageProps } from "./page.interface";
+import { resolveAuthErrorKey } from "./resolveAuthError";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getServerTranslations();
@@ -12,6 +13,8 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function AuthErrorPage({ searchParams }: AuthErrorPageProps) {
-  const resolvedSearchParams = await searchParams;
-  return <AuthErrorContent searchParams={resolvedSearchParams} />;
+  // AUTH-POC-4 / O-04 (P3.2): resolve on the server so only the allowlisted key is
+  // serialized to the client component, never the raw query values.
+  const errorKey = resolveAuthErrorKey(await searchParams);
+  return <AuthErrorContent errorKey={errorKey} />;
 }
