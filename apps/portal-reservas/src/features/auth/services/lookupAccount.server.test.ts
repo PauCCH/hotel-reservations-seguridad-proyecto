@@ -1,74 +1,99 @@
 /**
- * @file lookupAccount.server.test.ts — Regression test for AUTH-POC-3.
+ * @file lookupAccount.server.test.ts — Regression test for AUTH-POC-3 (fixed in P3.1).
  *
- * Does NOT hit a real Supabase project. Mocks `@hotel/db` and asserts the exact
- * PostgREST `.or()` filter string the service builds, proving that
- * attacker-controlled `name`/`accountId` values are concatenated unescaped into
- * filter *syntax* (not just filter values) — the OWASP A03 injection class for
- * Supabase/PostgREST query builders. See `lookupAccount.server.ts` for the full
- * writeup and `docs/proyecto-seguridad/auth/fase-2-pocs.md` (AUTH-POC-3) for the
- * live reproduction.
- *
- * This test is expected to start FAILING once P3.1 replaces `.or()` with
- * parameterized `.eq()` / `.ilike()` filters — that is the regression signal
- * Fase 3 needs.
+ * Does NOT hit a real Supabase project. Mocks `@hotel/db` and asserts that the
+ * service no longer builds PostgREST filter strings: the only filter is a
+ * parameterized `.eq()` on a validated UUID, and the name is compared exactly in
+ * code. The Fase 2 payload (`name = "a,is_active.eq.true"`) must return nothing.
+ * See `docs/proyecto-seguridad/auth/fase-2-pocs.md` (AUTH-POC-3) for the original
+ * reproduction and `fase-3-parches.md` for the fix.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const orSpy = vi.fn();
+const ACCOUNT_ID = "11111111-1111-4111-8111-111111111111";
+
+const { builder, fromSpy, maybeSingleResult } = vi.hoisted(() => {
+  const maybeSingleResult: { data: unknown; error: unknown } = { data: null, error: null };
+  const builder = {
+    select: vi.fn(() => builder),
+    eq: vi.fn(() => builder),
+    or: vi.fn(() => builder),
+    ilike: vi.fn(() => builder),
+    limit: vi.fn(() => builder),
+    maybeSingle: vi.fn(() => Promise.resolve(maybeSingleResult)),
+  };
+  return { builder, fromSpy: vi.fn(() => builder), maybeSingleResult };
+});
 
 vi.mock("@hotel/db", async () => {
   const actual = await vi.importActual<typeof import("@hotel/db")>("@hotel/db");
-
-  const builder = {
-    select: vi.fn(() => builder),
-    or: vi.fn((filter: string) => {
-      orSpy(filter);
-      return builder;
-    }),
-    limit: vi.fn(() => Promise.resolve({ data: [], error: null })),
-  };
-
   return {
     ...actual,
-    createSupabaseServiceClient: vi.fn(() => ({
-      from: vi.fn(() => builder),
-    })),
+    createSupabaseServiceClient: vi.fn(() => ({ from: fromSpy })),
   };
 });
 
 import { lookupAccount } from "./lookupAccount.server";
 
-describe("lookupAccount (AUTH-POC-3)", () => {
+describe("lookupAccount (AUTH-POC-3, fixed)", () => {
   beforeEach(() => {
-    orSpy.mockClear();
+    vi.clearAllMocks();
+    maybeSingleResult.data = { id: ACCOUNT_ID, full_name: "Ada Lovelace", is_active: true };
+    maybeSingleResult.error = null;
   });
 
-  it("concatenates the raw name and accountId into the .or() filter string", async () => {
-    await lookupAccount({ name: "Ada Lovelace", accountId: "00000000-0000-0000-0000-000000000000" });
+  it("filters only with a parameterized .eq() on the account id (no .or() string)", async () => {
+    const result = await lookupAccount({ name: "ada  lovelace ", accountId: ACCOUNT_ID });
 
-    expect(orSpy).toHaveBeenCalledWith(
-      "full_name.ilike.%Ada Lovelace%,id.eq.00000000-0000-0000-0000-000000000000",
-    );
+    expect(builder.or).not.toHaveBeenCalled();
+    expect(builder.ilike).not.toHaveBeenCalled();
+    expect(builder.eq).toHaveBeenCalledTimes(1);
+    expect(builder.eq).toHaveBeenCalledWith("id", ACCOUNT_ID);
+    expect(result).toEqual([{ id: ACCOUNT_ID, fullName: "Ada Lovelace", isActive: true }]);
   });
 
-  it("lets an attacker inject additional PostgREST filter syntax via `name`", async () => {
-    // Payload: closes the intended `full_name.ilike.%…%` value early with a
-    // comma (PostgREST's OR-clause separator) and appends `is_active.eq.true`,
-    // a condition that matches every active profile — turning "find my own
-    // account" into "return every active profile".
-    const injectedName = "a,is_active.eq.true";
+  it("neutralizes the Fase 2 payload: injected filter syntax returns nothing", async () => {
+    const result = await lookupAccount({ name: "a,is_active.eq.true", accountId: "none" });
 
-    await lookupAccount({ name: injectedName, accountId: "none" });
+    expect(result).toEqual([]);
+    expect(fromSpy).not.toHaveBeenCalled();
+    expect(builder.or).not.toHaveBeenCalled();
+  });
 
-    const sentFilter = orSpy.mock.calls[0][0] as string;
-    expect(sentFilter).toBe("full_name.ilike.%a,is_active.eq.true%,id.eq.none");
+  it("neutralizes the payload that dumped every profile live (valid UUID + OR clause)", async () => {
+    // Against the vulnerable .or() this returned all 7 local profiles
+    // (evidencias/P3.1-AUTH-POC-3-retest.txt). Now the name never reaches the query.
+    maybeSingleResult.data = null;
 
-    // The resulting PostgREST filter has three top-level OR'd conditions — the
-    // injected `is_active.eq.true` matches every active profile regardless of
-    // the name the attacker actually typed.
-    const clauses = sentFilter.split(",");
-    expect(clauses).toEqual(["full_name.ilike.%a", "is_active.eq.true%", "id.eq.none"]);
+    const result = await lookupAccount({
+      name: "zzz,is_active.eq.true,full_name.ilike.zzz",
+      accountId: "00000000-0000-0000-0000-000000000000",
+    });
+
+    expect(result).toEqual([]);
+    expect(builder.or).not.toHaveBeenCalled();
+    expect(builder.eq).toHaveBeenCalledWith("id", "00000000-0000-0000-0000-000000000000");
+  });
+
+  it("rejects a non-UUID accountId carrying filter syntax before querying", async () => {
+    const result = await lookupAccount({
+      name: "Ada Lovelace",
+      accountId: `${ACCOUNT_ID},is_active.eq.true`,
+    });
+
+    expect(result).toEqual([]);
+    expect(fromSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not treat LIKE wildcards in the name as patterns", async () => {
+    for (const name of ["%", "_%", "*", "Ada%"]) {
+      expect(await lookupAccount({ name, accountId: ACCOUNT_ID })).toEqual([]);
+    }
+    expect(builder.ilike).not.toHaveBeenCalled();
+  });
+
+  it("returns nothing when the name does not match the account", async () => {
+    expect(await lookupAccount({ name: "Mallory", accountId: ACCOUNT_ID })).toEqual([]);
   });
 });

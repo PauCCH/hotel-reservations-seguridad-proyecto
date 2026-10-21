@@ -39,6 +39,7 @@ import {
   DB_COLUMNS,
   DB_ENUMS,
   DB_TABLES,
+  RPC_FUNCTIONS,
 } from "@hotel/db";
 import { getUserPermissions } from "../permissions";
 import type { ActivationErrorCode } from "./config/constants";
@@ -78,6 +79,8 @@ export type {
 export { getInitialAuthStatus, getServerAuthContext } from "./server/getServerAuthContext";
 export { loginAction, loginFormAction } from "./server/loginAction";
 export { getAuthContextAction, refreshSession } from "./server/refreshSession";
+export type { VerifiedSession } from "./server/getVerifiedSession";
+export { getVerifiedSession } from "./server/getVerifiedSession";
 export { redirectToLogin, signOutAction } from "./server/signOutAction";
 
 // ============================================================================
@@ -195,6 +198,10 @@ export async function signUp(
 
 /**
  * Invite a new admin by email.
+ *
+ * The admin role is granted server-side via `promote_invited_admin` (service-role
+ * only), never through `user_metadata`: the signup trigger ignores
+ * `raw_user_meta_data.role` since AUTH-POC-1 (P3.1).
  */
 export async function inviteAdminByEmail(
   email: string,
@@ -202,15 +209,21 @@ export async function inviteAdminByEmail(
   full_name?: string,
 ): Promise<{ id: string; email: string }> {
   const supabase = createSupabaseServiceClient();
-  const options: { redirectTo: string; data?: { role: string; full_name: string } } = {
+  const options: { redirectTo: string; data?: { full_name: string } } = {
     redirectTo,
   };
   if (full_name) {
-    options.data = { role: "admin", full_name };
+    options.data = { full_name };
   }
   const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, options);
   if (error) throw new Error(error.message);
   if (!data?.user) throw new Error("Invitation returned no user");
+
+  const { error: promoteError } = await supabase.rpc(RPC_FUNCTIONS.PROMOTE_INVITED_ADMIN, {
+    p_user_id: data.user.id,
+  });
+  if (promoteError) throw new Error(promoteError.message);
+
   return { id: data.user.id, email: data.user.email ?? email };
 }
 

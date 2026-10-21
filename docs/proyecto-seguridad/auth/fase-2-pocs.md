@@ -264,12 +264,26 @@ full_name.ilike.%Ada Lovelace%,id.eq.00000000-0000-0000-0000-000000000000
 full_name.ilike.%a,is_active.eq.true%,id.eq.none
 ```
 
-que PostgREST parte en tres condiciones OR: `full_name.ilike.%a` (falsa para casi todos),
-`is_active.eq.true` (**verdadera para toda cuenta activa**) e `id.eq.none`. Al ser OR, basta la segunda
-para devolver **todos los perfiles activos** con su `full_name` e `id`.
+El test demuestra que el atacante controla la **sintaxis** del filtro (la coma abre nuevas condiciones OR),
+pero solo compara el string: no lo ejecuta contra la base. Ese payload concreto **no vuelca la tabla en
+vivo**: el `%` final cae en el valor booleano (`is_active.eq.true%`) y `accountId = "none"` no es un UUID,
+así que PostgREST responde `22P02 invalid input syntax` (verificado en el re-test de la Fase 3).
 
-**Reproducción en vivo (con Supabase local):** llamar a la server action / endpoint con
-`{ "name": "a,is_active.eq.true", "accountId": "none" }` devuelve el listado completo de perfiles.
+**Reproducción en vivo (con Supabase local) — payload corregido:** hay que cerrar el `ilike` inicial y
+absorber el `%` final con otra condición, y pasar un `accountId` con forma de UUID:
+
+```
+name      = zzz,is_active.eq.true,full_name.ilike.zzz
+accountId = 00000000-0000-0000-0000-000000000000
+
+# filtro que arma lookupAccount:
+full_name.ilike.%zzz,is_active.eq.true,full_name.ilike.zzz%,id.eq.00000000-0000-0000-0000-000000000000
+```
+
+PostgREST lo parte en cuatro condiciones OR: `full_name.ilike.%zzz` (falsa), `is_active.eq.true`
+(**verdadera para toda cuenta activa**), `full_name.ilike.zzz%` (falsa) e `id.eq.<uuid>` (falsa). Al ser
+OR, basta la segunda para devolver **todos los perfiles activos** con su `full_name` e `id`: en el entorno
+local, 7 de 7 perfiles (control con `name = "zzz-no-existe"`: 0 filas).
 
 ### Resultado esperado vs. obtenido
 
@@ -287,7 +301,9 @@ A01.
 ### Evidencia
 
 - Salida de `vitest` del test de regresión (AUTH-POC-3) — `evidencias/AUTH-POC-3-vitest.txt`.
-- `evidencias/AUTH-POC-3-dump-profiles.png` — respuesta con todos los perfiles (reproducción en vivo).
+- `evidencias/P3.1-AUTH-POC-3-retest.txt` §1 — **reproducción en vivo** con el payload corregido (7 perfiles
+  devueltos) y el fallo `22P02` del payload original. Se capturó durante el re-test de la Fase 3, ejecutando
+  contra PostgREST el mismo filtro que arma el código vulnerable.
 
 ### Remediación (Fase 3 → P3.1)
 

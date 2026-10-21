@@ -539,6 +539,7 @@ export type Database = {
         Returns: boolean
       }
       is_admin_or_owner: { Args: never; Returns: boolean }
+      promote_invited_admin: { Args: { p_user_id: string }; Returns: undefined }
       set_admin_permissions: { Args: { admin_id: string }; Returns: undefined }
       set_owner_permissions: { Args: { owner_id: string }; Returns: undefined }
     }

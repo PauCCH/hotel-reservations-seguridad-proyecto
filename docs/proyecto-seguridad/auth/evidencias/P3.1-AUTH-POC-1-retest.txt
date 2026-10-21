@@ -1,0 +1,76 @@
+AUTH-POC-1 — Re-test tras el parche P3.1 (escalamiento de rol en el registro)
+Entorno: Supabase local (http://127.0.0.1:54321). Fecha: 2026-10-21.
+Rama: security/auth/fase3-parches, commit 1ef0b61
+Migración aplicada: 20261021000001_auth_signup_role_hardening.sql
+Antes (Fase 2): evidencias/AUTH-POC-1-signup-role-admin.txt + AUTH-POC-1-user_roles-admin.jpg
+Tokens y apikeys redactados; es un entorno local de prueba.
+
+========================================================================
+1) MISMO ATAQUE DE LA FASE 2 — signup con role inyectado en `data`
+========================================================================
+$ curl -s -X POST "http://127.0.0.1:54321/auth/v1/signup" \
+    -H "apikey: <ANON/PUBLISHABLE_KEY_REDACTED>" \
+    -H "Content-Type: application/json" \
+    -d '{"email":"attacker-after-fix@poc.local","password":"<REDACTED>",
+         "data":{"full_name":"Mallory","role":"admin"}}'
+
+Respuesta (extracto):
+{
+  "id": "5447f7b7-8924-4047-8e17-bd882f722194",
+  "email": "attacker-after-fix@poc.local",
+  "role": "authenticated",
+  "user_metadata": { "full_name": "Mallory", "role": "admin", ... },  <-- el atacante lo sigue enviando
+  "app_metadata":  { "provider": "email", "providers": ["email"] }    <-- sin role (no controlable)
+}
+
+========================================================================
+2) VERIFICACIÓN — public.user_roles
+========================================================================
+$ psql -c "select u.email, ur.role from public.user_roles ur
+           join auth.users u on u.id = ur.user_id order by ur.role, u.email;"
+
+             email             |  role
+-------------------------------+--------
+ owner@hotel.local             | owner
+ admin@hotel.local             | admin
+ attacker-escalation@poc.local | admin    <-- cuenta creada en la Fase 2 (antes del parche)
+ manager@hotel.local           | admin
+ newadmin@hotel.local          | admin
+ attacker-after-fix@poc.local  | client   <-- ✅ mismo payload, ahora `client`
+
+handle_new_user() ya no lee raw_user_meta_data ->> 'role'; solo raw_app_meta_data.
+
+========================================================================
+3) NO REGRESIÓN — la invitación de admins sigue funcionando
+========================================================================
+Mismo flujo que inviteAdminByEmail (packages/core/src/auth/index.ts):
+  a) POST /auth/v1/invite con service_role, data = {"full_name":"Invited Admin"} (sin role)
+     -> user 8173f849-7c4c-4a3b-998b-96cb29b5350b, role tras el trigger: client
+  b) POST /rest/v1/rpc/promote_invited_admin {"p_user_id": "<id>"} con service_role
+     -> HTTP 204
+
+ role  | app_meta_role |            permissions
+-------+---------------+-----------------------------------
+ admin | admin         | view:dashboard, reservations:view   <-- ✅ admin + permisos base
+
+========================================================================
+4) EL ATACANTE NO PUEDE LLAMAR A promote_invited_admin
+========================================================================
+Con anon key:
+  {"code":"42501","message":"permission denied for function promote_invited_admin"}  HTTP 401
+Logueado como attacker-after-fix@poc.local (rol authenticated):
+  {"code":"42501","message":"permission denied for function promote_invited_admin"}  HTTP 403
+Rol final del atacante: client
+
+ACL de la función (pg_proc.proacl):
+ promote_invited_admin | p_user_id uuid | {postgres=X/postgres,service_role=X/postgres}
+sync_role_to_jwt: ya no existe (0 filas en pg_proc).
+
+========================================================================
+RESULTADO: la PoC original ya no funciona. Un registro público siempre
+queda como `client`; la promoción a admin solo ocurre server-side con la
+service-role key (createAdminAccountAction exige además admins:invite).
+Riesgo residual propuesto: Bajo.
+Nota: las cuentas escaladas ANTES del parche (attacker-escalation@poc.local)
+no se degradan automáticamente; se limpian a mano (no hay forma segura de
+distinguirlas de admins invitados legítimamente).
