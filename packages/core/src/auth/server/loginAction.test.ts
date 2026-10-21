@@ -40,6 +40,9 @@ vi.mock("../../audit", () => ({
     AUTH_LOGIN_SUCCESS: "auth.login.success",
     AUTH_LOGIN_FAILED: "auth.login.failed",
   },
+}));
+
+vi.mock("../../audit/server", () => ({
   logAuditEvent: mockLogAuditEvent,
   getAuditRequestContext: mockGetAuditRequestContext,
 }));
