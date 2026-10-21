@@ -54,6 +54,9 @@ export interface AuditLogEntry {
   ip_address: string | null;
   user_agent: string | null;
   created_at: string;
+  seq: number;
+  prev_hash: string | null;
+  row_hash: string;
 }
 
 export interface PendingInvitation {

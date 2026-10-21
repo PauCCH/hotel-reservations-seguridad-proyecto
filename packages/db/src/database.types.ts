@@ -52,6 +52,9 @@ export type Database = {
           id: string
           ip_address: string | null
           metadata: Json
+          prev_hash: string | null
+          row_hash: string
+          seq: number
           user_agent: string | null
         }
         Insert: {
@@ -64,6 +67,9 @@ export type Database = {
           id?: string
           ip_address?: string | null
           metadata?: Json
+          prev_hash?: string | null
+          row_hash?: string
+          seq?: number
           user_agent?: string | null
         }
         Update: {
@@ -76,6 +82,9 @@ export type Database = {
           id?: string
           ip_address?: string | null
           metadata?: Json
+          prev_hash?: string | null
+          row_hash?: string
+          seq?: number
           user_agent?: string | null
         }
         Relationships: []
