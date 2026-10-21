@@ -1,0 +1,32 @@
+AUTH-POC-2 — Confianza en el claim del JWT (O-05)
+Entorno: Supabase local. Fecha: 2026-10-21.
+
+========================================================================
+1) CLAIMS DEL JWT de un admin legítimo (admin@hotel.local)
+   token obtenido por password grant contra GoTrue local; decodificado.
+========================================================================
+top-level  "role"               = authenticated     <-- el claim que compara la RLS
+user_metadata.role (negocio)    = (vacío)            <-- el rol de negocio NO viaja en el JWT
+email                           = admin@hotel.local
+
+Nota: el rol de negocio vive en public.user_roles, no en el JWT. Solo el trigger
+huérfano sync_role_to_jwt (O-05) copiaría el rol a user_metadata, y aun así iría
+bajo `user_metadata`, no en el claim top-level `role`.
+
+========================================================================
+2) POLÍTICA RLS de public.rooms (pg_policies)
+========================================================================
+             policyname              |  cmd   |                      qual
+-------------------------------------+--------+-------------------------------------------------
+ Rooms are viewable by everyone      | SELECT | true
+ Rooms are manageable by admins only | ALL    | ((auth.jwt() ->> 'role'::text) = 'admin'::text)
+
+========================================================================
+RESULTADO
+========================================================================
+La política "manageable by admins only" compara `auth.jwt() ->> 'role'` contra
+'admin'. Pero ese claim top-level SIEMPRE vale 'authenticated' (rol de Postgres)
+para cualquier usuario logueado — nunca 'admin'. La condición jamás se cumple:
+la autorización está mal ubicada en un claim equivocado (confianza rota en el JWT).
+Combinado con AUTH-POC-1 (el atacante ya es admin en user_roles), el JWT no es una
+barrera adicional. Fix P3.1: comparar contra public.user_roles / usar getUser().

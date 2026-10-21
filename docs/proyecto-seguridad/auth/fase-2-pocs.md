@@ -101,8 +101,10 @@ Usuarios (Joseph), que consume el mismo `user_roles`.
 
 ### Evidencia
 
-- `evidencias/AUTH-POC-1-signup-role-admin.txt` — request/response del signup (anon key redactada).
-- `evidencias/AUTH-POC-1-user_roles-admin.png` — fila `role = admin` en `user_roles`.
+- `evidencias/AUTH-POC-1-signup-role-admin.txt` — **captura en vivo**: request del signup con `role:"admin"`
+  + verificación SQL (anon key y tokens redactados).
+- `evidencias/AUTH-POC-1-user_roles-admin.jpg` — **captura en vivo** (Supabase Studio): la cuenta
+  auto-registrada `attacker-escalation@poc.local` figura con `role = admin` junto a los admins del seed.
 
 ### Remediación (Fase 3 → P3.1)
 
@@ -189,9 +191,9 @@ modelo de confianza del JWT no es una barrera adicional. `getSession()` en SSR n
 
 ### Evidencia
 
-- `evidencias/AUTH-POC-2-jwt-claims.png` — decodificación del JWT mostrando `role: authenticated` y
-  `user_metadata.role`.
-- `evidencias/AUTH-POC-2-rls-policy.txt` — política de `rooms` y consulta de claims.
+- `evidencias/AUTH-POC-2-rls-policy.txt` — **captura en vivo**: claims decodificados de un JWT real
+  (`role: authenticated`, el rol de negocio no viaja en el token) + la política RLS de `rooms`
+  (`(auth.jwt() ->> 'role') = 'admin'`, que nunca se cumple).
 
 ### Remediación (Fase 3 → P3.1)
 
@@ -444,7 +446,13 @@ un clon del atacante. También facilita el robo de `code`/tokens si se encadena 
 
 ### Evidencia
 
-- `evidencias/AUTH-POC-5-open-redirect.txt` — `curl -i` mostrando el `Location:` externo (pendiente de entorno).
+- `evidencias/AUTH-POC-5-open-redirect2.png` — **captura en vivo (paso 1)**: el login real del hotel con el
+  enlace malicioso en la barra de direcciones (`localhost:3001/auth/login?callbackUrl=https://example.com/`)
+  y las credenciales cargadas, antes de enviar.
+- `evidencias/AUTH-POC-5-open-redirect2.1.png` — **captura en vivo (paso 2)**: tras iniciar sesión, el
+  navegador queda en `https://example.com` (barra de direcciones visible) — redirigido fuera del sitio.
+- `evidencias/AUTH-POC-5-open-redirect.txt` — cadena de red que lo respalda:
+  `POST /auth/login?callbackUrl=https://example.com/` → `303 See Other` → `GET https://example.com/`.
 
 ### Remediación (Fase 3 → P3.3)
 
@@ -515,7 +523,12 @@ para el XSS stored que Fabian demuestra en su visor (AU-R01). Degrada la capacid
 
 ### Evidencia
 
-- `evidencias/AUTH-POC-6-log-injection.txt` — request + fila resultante en `audit_logs` (pendiente de entorno).
+- `evidencias/AUTH-POC-6-log-injection.txt` — **captura en vivo**: filas contaminadas en `audit_logs`
+  (atribución forjada a `owner@hotel.local` + contenido libre simulando un `login.success`).
+- `evidencias/AUTH-POC-6-log-injection.jpg` — **captura en vivo** (Studio): las filas poisoned en `audit_logs`.
+- Nota: el `<input type="email">` quita el salto de línea en el navegador, así que el CR/LF y el spoofing de
+  IP (`x-forwarded-for`) requieren un cliente HTTP crudo; la inyección de contenido y la atribución forjada
+  quedan demostradas en vivo igual.
 
 ### Remediación (Fase 3 → P3.3 + P3.4, coordinado con Fabian)
 
