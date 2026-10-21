@@ -68,9 +68,11 @@ if (!admin) throw new PermissionDeniedError(PERMISSIONS.AUDIT.VIEW);
 await requirePermission(PERMISSIONS.AUDIT.VIEW);
 ```
 
-**Regresión:** test `rejects an admin without audit:view (AUD-POC-1)` en `apps/panel-admin/tests/audit-log/getAuditLogs.test.ts`.
-**La PoC no se volvió a ejecutar en vivo:** necesita la cuenta admin sin `audit:view`
-(`vargasarayafabian11@gmail.com`) y no hubo credenciales en la sesión de re-prueba.
+**Regresión:** test `rejects an admin without audit:view (AUD-POC-1)` en
+`apps/panel-admin/tests/audit-log/getAuditLogs.test.ts` y **re-prueba en vivo**
+(`evidencias/F3-retest-poc-4-5-6-2.txt`): con la cuenta admin sin `audit:view`, la llamada directa a
+`getAuditLogs` lanza `PermissionDeniedError: Permission denied: audit:view` y no devuelve filas (antes:
+200 con el log completo).
 
 **Riesgo residual — Medio.** El permiso ahora se exige, pero `getAuditLogs` sigue leyendo con
 **service-role** (salta RLS) y usa `getSession()` en vez de `getUser()` (O13), igual que `requirePermission`.
@@ -292,7 +294,7 @@ Ninguno estaba en el alcance de los tres vectores del enunciado; se declaran par
 |---|---|---|---|
 | AU-R01 XSS stored vía metadatos | Crítico (16) | **Bajo** | Sumidero eliminado y verificado en navegador; falta CSP (Paula) como segunda capa |
 | AU-R04 Audit poisoning (IP + inyección + escritor expuesto) | Crítico (12) | **Medio** | Contenido y escritor cerrados; la IP depende de configurar el proxy (AU-X03) |
-| AU-R02 Lectura sin permiso | Alto (9) | **Medio** | Permiso exigido; sigue `getSession()` y service-role; sin re-prueba en vivo |
+| AU-R02 Lectura sin permiso | Alto (9) | **Medio** | Permiso exigido y re-probado en vivo; sigue `getSession()` y service-role |
 | AU-R03 Inyección en `search` | Alto (9) | **Bajo** | Lista blanca, re-probada en vivo |
 | AU-R05 Alteración del histórico | Alto (8) | **Medio** | Controles hechos y probados solo en BD local; sin aplicar al remoto; SHA-256 sin clave |
 | AU-R06 Volcado / carga | Medio (6) | **Medio** | Tope de `pageSize`; sigue sin retención |
@@ -303,7 +305,6 @@ Ninguno estaba en el alcance de los tres vectores del enunciado; se declaran par
 ## 4. Pendiente para cerrar la Fase 3
 
 - [ ] **Decidir y aplicar** las migraciones `…0003` y `…0004` en el Supabase remoto (cambio compartido).
-- [ ] Re-probar AUD-POC-1 en vivo con la cuenta admin **sin** `audit:view`.
 - [ ] Definir el proxy de producción y fijar `AUDIT_TRUSTED_PROXY_HOPS`.
 - [ ] Revisión cruzada del PR (G3.3) y PR contra `develop`.
 - [ ] Video (F3.7, ≤ 5 min, solo IDE).

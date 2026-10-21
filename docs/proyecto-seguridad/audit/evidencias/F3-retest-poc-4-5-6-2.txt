@@ -44,7 +44,17 @@ AUD-POC-3 (pageSize sin tope) — cubierta por test unitario
   no es observable con este volumen de datos; se verifica en
   apps/panel-admin/tests/audit-log/getAuditLogs.test.ts.
 
-AUD-POC-1 (acceso sin audit:view) — NO re-probada
-  Requiere la cuenta admin sin audit:view (vargasarayafabian11@gmail.com), cuyas
-  credenciales no estaban disponibles en esta sesión. El parche es
-  requirePermission(PERMISSIONS.AUDIT.VIEW) en getAuditLogs.ts, cubierto por test.
+AUD-POC-1 (acceso sin audit:view) — NEUTRALIZADA (re-probada después)
+  Cuenta: vargasarayafabian11@gmail.com (rol admin activo, SIN audit:view; la misma
+  de Fase 2). Sesión iniciada en el navegador (Playwright + Chromium).
+  UI: /admin/audit-log muestra "403 Acceso Restringido" y el menú no lista Auditoría.
+  Ataque directo, como en Fase 2 (sin pasar por la UI):
+    POST /admin/audit-log, Next-Action: 7fbeb276649f58679593a78c99fbb7b69e00cceabf
+    (id de getAuditLogs en esta compilación), body [{"page":1,"pageSize":5}]
+  Respuesta: HTTP 500 con el error serializado
+    name = "PermissionDeniedError", message = "Permission denied: audit:view"
+    lanzado desde requirePermission (src/shared/auth/requirePermission.ts)
+  Filas devueltas: 0; "owner@hotel.local" no aparece en la respuesta.
+  Antes (Fase 2): HTTP 200 con el log completo (total: 14).
+  Nota: el estado es 500 y no 403 porque la acción lanza una excepción; lo que
+  cuenta es que no se entrega ningún dato. En dev la respuesta incluye el stack.
