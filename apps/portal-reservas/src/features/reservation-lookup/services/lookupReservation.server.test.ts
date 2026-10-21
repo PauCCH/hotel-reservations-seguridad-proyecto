@@ -1,20 +1,21 @@
 /**
- * @file lookupReservation.server.test.ts — Regression test for OP-POC-1.
+ * @file lookupReservation.server.test.ts — Regression test for A3.1 (OP-POC-1).
  *
- * Does NOT hit a real Supabase project. Mocks `@hotel/db` and asserts the
- * exact PostgREST `.or()` filter string the service builds, proving that
- * attacker-controlled `code`/`email` values are concatenated unescaped into
- * filter *syntax* (not just filter values) — the OWASP A03 injection class
- * for Supabase/PostgREST query builders. See `lookupReservation.server.ts`
- * for the full writeup and `docs/proyecto-seguridad/operations/fase-2-pocs.md`
- * (OP-POC-1) for the live reproduction over HTTP.
+ * Does NOT hit a real Supabase project. Mocks `@hotel/db` and asserts that the
+ * lookup now binds `code`/`email` through parameterized `.eq()` calls and never
+ * builds a `.or()` filter string. This is the Fase 3 regression signal: the
+ * OP-POC-1 injection (`email = "a,status.ilike.%"`) can no longer inject filter
+ * syntax — PostgREST receives it as a literal equality value — so the
+ * always-true OR clause that dumped every row is gone.
  *
- * This test is expected to start FAILING once A3.1 replaces `.or()` with
- * parameterized `.eq()` filters — that is the regression signal Fase 3 needs.
+ * See `lookupReservation.server.ts` for the fix writeup and
+ * `docs/proyecto-seguridad/operations/fase-2-pocs.md` (OP-POC-1) for the
+ * original vulnerable reproduction.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const eqSpy = vi.fn();
 const orSpy = vi.fn();
 
 vi.mock("@hotel/db", async () => {
@@ -22,6 +23,10 @@ vi.mock("@hotel/db", async () => {
 
   const builder = {
     select: vi.fn(() => builder),
+    eq: vi.fn((column: string, value: unknown) => {
+      eqSpy(column, value);
+      return builder;
+    }),
     or: vi.fn((filter: string) => {
       orSpy(filter);
       return builder;
@@ -39,39 +44,31 @@ vi.mock("@hotel/db", async () => {
 
 import { lookupReservation } from "./lookupReservation.server";
 
-describe("lookupReservation (OP-POC-1)", () => {
+describe("lookupReservation (A3.1 fix for OP-POC-1)", () => {
   beforeEach(() => {
+    eqSpy.mockClear();
     orSpy.mockClear();
   });
 
-  it("concatenates the raw code and email into the .or() filter string", async () => {
+  it("binds code and email as parameterized .eq() filters (never .or())", async () => {
     await lookupReservation({ code: "RES-001", email: "guest@example.com" });
 
-    expect(orSpy).toHaveBeenCalledWith(
-      "code.ilike.%RES-001%,guest_email.ilike.%guest@example.com%",
-    );
+    expect(orSpy).not.toHaveBeenCalled();
+    expect(eqSpy).toHaveBeenCalledWith("code", "RES-001");
+    expect(eqSpy).toHaveBeenCalledWith("guest_email", "guest@example.com");
   });
 
-  it("lets an attacker inject additional PostgREST filter syntax via `email`", async () => {
-    // Payload: closes the intended `guest_email.ilike.%…%` value early with a
-    // comma (PostgREST's OR-clause separator) and appends `status.ilike.%%`,
-    // an always-true condition (any status matches a `%` wildcard on both
-    // sides) — turning "find my one reservation" into "return every row".
+  it("neutralizes the OP-POC-1 payload: injected syntax is passed as a literal value", async () => {
+    // The original attack closed the email filter with a comma (PostgREST's
+    // OR separator) and appended an always-true `status.ilike.%%` clause.
     const injectedEmail = "a,status.ilike.%";
 
     await lookupReservation({ code: "ZZZZ", email: injectedEmail });
 
-    const sentFilter = orSpy.mock.calls[0][0] as string;
-    expect(sentFilter).toBe("code.ilike.%ZZZZ%,guest_email.ilike.%a,status.ilike.%%");
-
-    // The resulting PostgREST filter has three top-level OR'd conditions —
-    // the third one is unconditionally true, so it matches every reservation
-    // regardless of the real `code`/`email` on file.
-    const clauses = sentFilter.split(",");
-    expect(clauses).toEqual([
-      "code.ilike.%ZZZZ%",
-      "guest_email.ilike.%a",
-      "status.ilike.%%",
-    ]);
+    // No OR filter is built at all, and the payload reaches .eq() verbatim as a
+    // value — PostgREST compares `guest_email = "a,status.ilike.%"` literally,
+    // which matches no row, instead of being parsed as extra filter clauses.
+    expect(orSpy).not.toHaveBeenCalled();
+    expect(eqSpy).toHaveBeenCalledWith("guest_email", injectedEmail);
   });
 });

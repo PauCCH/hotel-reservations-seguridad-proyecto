@@ -32,19 +32,14 @@ export const ReservationGuestCard = ({ guest }: ReservationGuestCardProps) => {
           <div className={STYLES.fieldRow}>
             <span className={STYLES.fieldLabel}>{labels.LABEL_NOTES}</span>
             {/*
-              ⚠️ SECURITY COURSE PROJECT — CONTROLLED VULNERABILITY (OP-POC-3) ⚠️
-              Stored XSS: `guest.notes` is free text typed by an anonymous guest
-              at checkout (portal) and is rendered here UNESCAPED, so a payload
-              like `<img src=x onerror=...>` runs in the authenticated admin's
-              session. Introduced per the team decision in
-              `docs/proyecto-seguridad/plan-desarrollo.md` §4.1. The Fase 3 fix
-              (A3.2) renders this as text — `{guest.notes}` — instead of HTML.
+              FIXED (A3.2 / OP-POC-3): render the guest note as TEXT. React
+              escapes interpolated strings, so a guest-supplied payload such as
+              `<img src=x onerror=...>` is shown literally instead of executing
+              in the admin's session. This replaces the previous
+              `dangerouslySetInnerHTML` stored-XSS sink. Aligned with F3.2
+              (Fabian) and Paula's global CSP as defense in depth.
             */}
-            <span
-              className={STYLES.fieldValue}
-              // biome-ignore lint/security/noDangerouslySetInnerHtml: intentional OP-POC-3 sink; fixed in A3.2
-              dangerouslySetInnerHTML={{ __html: guest.notes }}
-            />
+            <span className={STYLES.fieldValue}>{guest.notes}</span>
           </div>
         </>
       ) : null}

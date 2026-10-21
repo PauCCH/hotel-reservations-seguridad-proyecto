@@ -24,30 +24,79 @@
 
 import type { Room } from "@/features/rooms";
 import { createSupabaseServiceClient, DB_COLUMNS, DB_TABLES } from "@hotel/db";
+import { RESERVATION_STATUS_CANCELLED } from "../constants/checkout.constants";
 import type { CheckoutSessionPayload } from "../domain/types";
 
-export async function persistReservation(
-  payload: CheckoutSessionPayload,
-  rooms: Room[],
-  nights: number,
-): Promise<void> {
+/**
+ * A3.3 / OP-POC-5: returns true when every room is free for the requested
+ * range. A non-cancelled reservation overlaps when its check_in is before the
+ * new check_out AND its check_out is after the new check_in. Runs as the
+ * service-role client (reservations is deny-all under RLS).
+ */
+export async function areRoomsAvailable(
+  roomIds: string[],
+  checkIn: string,
+  checkOut: string,
+): Promise<boolean> {
   const supabase = createSupabaseServiceClient();
   const c = DB_COLUMNS.reservations;
 
-  const perNight = rooms.reduce((sum, room) => sum + room.price, 0);
+  const { data, error } = await supabase
+    .from(DB_TABLES.RESERVATIONS)
+    .select(c.id)
+    .in(c.room_id, roomIds)
+    .neq(c.status, RESERVATION_STATUS_CANCELLED)
+    .lt(c.check_in, checkOut)
+    .gt(c.check_out, checkIn)
+    .limit(1);
 
-  await supabase.from(DB_TABLES.RESERVATIONS).insert({
-    [c.guest_name]: payload.fullName,
-    [c.guest_email]: payload.email,
-    [c.guest_phone]: payload.phone,
-    // VULNERABLE SINK SOURCE (OP-POC-3): raw guest input, later rendered
-    // unescaped in the admin panel. The fix is output escaping, not this line.
-    [c.guest_notes]: payload.specialRequests,
-    [c.room_id]: rooms[0].id,
-    [c.check_in]: payload.checkIn,
-    [c.check_out]: payload.checkOut,
-    [c.adults]: payload.guests > 0 ? payload.guests : 1,
-    [c.price_per_night]: perNight,
-    [c.total_amount]: perNight * nights,
-  });
+  if (error) return false; // fail closed: treat an error as "not available"
+  return (data?.length ?? 0) === 0;
+}
+
+/** Postgres SQLSTATE for an exclusion-constraint violation (reservations_no_overlap). */
+const PG_EXCLUSION_VIOLATION = "23P01";
+
+export type PersistReservationResult = { ok: true } | { ok: false; reason: "conflict" | "error" };
+
+/**
+ * Inserts one reservation row per booked room in a single statement, so the
+ * EXCLUDE constraint guards every room (not only the first) and a conflict on
+ * any of them rolls back the whole booking. `roomDbIds` are the public.rooms
+ * uuids matching `rooms` by index (see `constants/room-catalog.ts`).
+ */
+export async function persistReservation(
+  payload: CheckoutSessionPayload,
+  rooms: Room[],
+  roomDbIds: string[],
+  nights: number,
+): Promise<PersistReservationResult> {
+  const supabase = createSupabaseServiceClient();
+  const c = DB_COLUMNS.reservations;
+
+  const { error } = await supabase.from(DB_TABLES.RESERVATIONS).insert(
+    rooms.map((room, i) => ({
+      [c.guest_name]: payload.fullName,
+      [c.guest_email]: payload.email,
+      [c.guest_phone]: payload.phone,
+      [c.guest_notes]: payload.specialRequests,
+      [c.room_id]: roomDbIds[i],
+      [c.check_in]: payload.checkIn,
+      [c.check_out]: payload.checkOut,
+      [c.adults]: payload.guests > 0 ? payload.guests : 1,
+      [c.price_per_night]: room.price,
+      [c.total_amount]: room.price * nights,
+    })),
+  );
+
+  if (error) {
+    // A3.3 hardening: the `reservations_no_overlap` EXCLUDE constraint rejects a
+    // concurrent overlapping booking that slipped past areRoomsAvailable (TOCTOU).
+    if ((error as { code?: string }).code === PG_EXCLUSION_VIOLATION) {
+      return { ok: false, reason: "conflict" };
+    }
+    return { ok: false, reason: "error" };
+  }
+
+  return { ok: true };
 }

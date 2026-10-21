@@ -1,0 +1,47 @@
+############ OP-POC-2 — galleryActions sin verificacion de permisos (A01) ############
+# Entorno: Supabase LOCAL, rama security/operations/fase2-pocs, 2026-10-20.
+
+## 1) CODIGO — las 3 Server Actions de galeria NO llaman a requirePermission y usan service-role:
+#    apps/panel-admin/src/features/rooms/services/galleryActions.ts
+#      uploadImage()   -> createSupabaseServiceClient(); (sin requirePermission)
+#      deleteImage()   -> createSupabaseServiceClient(); (sin requirePermission)
+#      reorderImages() -> createSupabaseServiceClient(); (sin requirePermission)
+#
+#  CONTRASTE (mismo modulo, patron correcto) reservationService.ts:
+#      getAllReservations()     -> await requirePermission(PERMISSIONS.RESERVATIONS.VIEW)
+#      updateReservationStatus()-> await requirePermission(PERMISSIONS.RESERVATIONS.EDIT)
+#      getReservationById()     -> await requirePermission(PERMISSIONS.RESERVATIONS.VIEW)
+
+## 2) MIDDLEWARE (apps/panel-admin/src/middleware.ts) — solo exige sesion + is_active, NO rol/permiso:
+#      matcher: ["/admin/:path*"]
+#      - redirige a login solo si !user
+#      - redirige solo si profile.is_active === false
+#      -> cualquier cuenta activa (incl. una sin rooms:manage) pasa a /admin/**
+
+## 3) LIVE — cuenta sec.admin.norooms@hotel.local (rol ADMIN, permisos: view:dashboard, reservations:view;
+##    SIN rooms:manage) autenticada en el panel:
+#      GET /admin/rooms                       -> 200 (redirected:false)
+#      GET /admin/rooms/gallery?roomId=...     -> 200 (redirected:false)
+#    La barra lateral le oculta la seccion "Cuartos" (gate SOLO de UI por permiso), pero las rutas y las
+#    Server Actions de galeria son alcanzables en el servidor sin autorizacion.
+#    Captura: A2.1-A01-gallery-norooms-sidebar.png (sidebar sin "Cuartos", usuario sec.admin.norooms / ADMIN).
+
+## Nota de alcance:
+#  El disparo en vivo de la mutacion (deleteImage/reorderImages) via UI no se capturo: la galeria crashea por
+#  un bug de UI ajeno a permisos (UploadDropzone.tsx:76, lee .join de undefined) y el error boundary la tapa;
+#  el replay directo del Server Action depende del id/encoding interno de Next (fragil). El hallazgo de
+#  autorizacion queda demostrado por (1) codigo, (2) middleware sin chequeo de rol y (3) rutas alcanzables (200)
+#  por la cuenta sin rooms:manage. Fix Fase 3 (A3.1): anteponer requirePermission(ROOMS.MANAGE) en las 3 acciones.
+
+## 4) LIVE — REPLAY DEL SERVER ACTION deleteImage con la cuenta SIN rooms:manage (2026-10-20):
+#  Autenticado como sec.admin.norooms@hotel.local (ADMIN, permisos: view:dashboard, reservations:view).
+#  Request (fetch desde el navegador, con la cookie de sesion de esa cuenta):
+#     POST /admin/rooms/gallery?roomId=7109418b-...
+#     Next-Action: 4092c2ef57aee27d275a7172b8346cf9d68e49f3be   (id de deleteImage)
+#     Content-Type: text/plain;charset=UTF-8
+#     body: ["9e5485a5-86ce-4c86-bb33-cfa2241bdc53"]   (id de una imagen existente)
+#  Respuesta:
+#     HTTP 200 ; flight body: 0:{...}  1:true   -> deleteImage retorno TRUE (sin PermissionDeniedError)
+#  Confirmacion en BD: SELECT en room_images -> la fila 9e5485a5 YA NO EXISTE (borrada).
+#
+#  => Una cuenta sin rooms:manage ejecuto una mutacion de galeria con exito. Hallazgo A01 confirmado EN VIVO.

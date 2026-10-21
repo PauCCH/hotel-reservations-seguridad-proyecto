@@ -198,8 +198,14 @@ Server Actions, porque Next.js no aplica ningún control adicional sobre ellas m
 
 - Lectura de código (arriba): ausencia de `requirePermission` confirmada por comparación directa con los
   tres servicios hermanos del mismo módulo que sí lo implementan correctamente.
-- Pendiente para el PR de A2.1: captura de la petición de red (`Next-Action`) reproduciendo el paso 3-5
-  con una cuenta de prueba de permisos acotados, a agregar en `operations/evidencias/`.
+- Reproducción en vivo (entorno local, 2026-10-20): con la cuenta `sec.admin.norooms@hotel.local` (rol
+  `admin`, permisos `view:dashboard` + `reservations:view`, **sin** `rooms:manage`) se hizo el replay del
+  Server Action `deleteImage` (`Next-Action: 4092c2ef…f3be`, body `["<imageId>"]`) → HTTP 200 y retorno
+  `true`, y la fila de `room_images` quedó **borrada** (verificado en BD). El middleware de `panel-admin`
+  solo exige sesión + `is_active` (no chequea rol), por lo que `/admin/rooms` y `/admin/rooms/gallery`
+  devuelven 200 a esa cuenta. Evidencias en `operations/evidencias/`:
+  `A2.1-A01-gallery-no-requirepermission.txt` (código + middleware + replay live) y
+  `A2.1-A01-gallery-norooms-sidebar.png`.
 
 ### Commit donde se reprodujo
 
@@ -282,10 +288,15 @@ el fix de salida (A3.2 / F3.2) debe alinearse.
 ### Evidencia
 
 - Lectura de código (arriba): el sink `dangerouslySetInnerHTML` y la cadena fuente→persistencia→render.
-- Pendiente de capturar en entorno con Supabase conectado: captura de pantalla del panel ejecutando el
-  payload (título de pestaña / alert) y de la fila `reservations` con `guest_notes` crudo, a agregar en
-  `operations/evidencias/` junto con la grabación (A3.7). Misma nota de entorno que OP-POC-1 (DNS hacia
-  `*.supabase.co` intermitente en este sandbox).
+- Reproducción en vivo (Supabase local, 2026-10-20): `A2.2-xss-executed-panel.png` (banner inyectado por el
+  `onerror` en la sesión del admin/owner), `A2.2-guest-notes-raw-row.txt` (fila con `guest_notes` crudo) y
+  `A2.2-xss-stored-panel.txt`. El sink confirmado es la **salida** sin escapar.
+- ⚠️ **Nota de entorno — persistencia del checkout inalcanzable:** el camino `checkout → persistReservation`
+  **no persiste**: inserta `room_id = rooms[0].id` tomado de `mockRooms` (string `"mv-1"`), pero
+  `reservations.room_id` es `uuid NOT NULL` con FK a `rooms` (ids uuid, datos disjuntos) → el insert falla con
+  `22P02` (invalid input syntax for type uuid). Por eso la fila de la PoC se **insertó directamente en la BD**
+  (el hallazgo de OP-POC-3 es el render sin escapar, no cómo llega el dato). Es un bug de datos aparte, no del
+  sink. Follow-up: reconciliar el catálogo de habitaciones (ver `fase-3-parches.md`, sección A3.3).
 
 ### Commit donde se reprodujo
 
@@ -376,8 +387,11 @@ curl -s -X POST http://localhost:3001/api/checkout \
 
 ### Evidencia
 
-- Lectura de código (arriba). Reproducción por HTTP con los comandos anteriores contra
-  `pnpm --filter @hotel/portal-reservas dev`. Misma nota de entorno que OP-POC-1 para la captura en vivo.
+- Lectura de código (arriba). Reproducción por HTTP en vivo (Supabase local, 2026-10-20):
+  `A2.3-A08-csrf-forced-reservation.txt` — `POST /api/checkout` sin cabecera `Origin` del sitio → **HTTP 200**.
+- ⚠️ **Nota:** el hallazgo confirmado es la **aceptación** de la petición cross-site (200). La "creación de la
+  fila" **no se observa** por el mismo bug de persistencia de OP-POC-3 (`room_id` mock vs `uuid`/FK → `22P02`),
+  que traga/rechaza el insert. No afecta al vector CSRF en sí.
 
 ### Commit donde se reprodujo
 
@@ -446,8 +460,16 @@ curl -s -X POST http://localhost:3001/api/checkout \
 
 ### Evidencia
 
-- Lectura de código + comandos `curl`. La validación que falta se agrega en A3.3 (esquema Zod server-side:
-  fechas futuras, disponibilidad, aforo ≤ capacidad) junto con la defensa anti-CSRF de OP-POC-4.
+- Lectura de código + comandos `curl`. Reproducción en vivo (Supabase local, 2026-10-20):
+  `A2.3-A08-param-tampering.txt` — fecha 2020 + aforo 99 (cuarto cap. 2) + doble booking → los tres **HTTP 200**.
+- La validación que falta se agrega en A3.3 (esquema Zod server-side: fechas futuras, aforo ≤ capacidad) junto
+  con la defensa anti-CSRF de OP-POC-4.
+- ⚠️ **Nota:** el sub-vector *fechas/aforo* se valida de verdad (Zod + capacidad, sobre `mockRooms` en memoria).
+  El sub-vector *disponibilidad/overbooking* y la "fila creada" **no se ejercitan** por el bug de persistencia
+  (`room_id` mock `"mv-1"` vs columna `uuid`/FK → `22P02`): la consulta de disponibilidad de A3.3 y el insert
+  fallan antes de tocar la lógica de solapamiento. Detalle e impacto en el riesgo residual: `fase-3-parches.md`.
+  **Resuelto en Fase 3** (commit `ce54581`, catálogo de rooms reconciliado): el checkout persiste y la
+  disponibilidad/`EXCLUDE` se verifican en vivo (`evidencias/A3.3-rooms-catalog-live.txt`).
 
 ### Commit donde se reprodujo
 

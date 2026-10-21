@@ -106,10 +106,17 @@ export const STRIPE = Object.freeze({
 export const CHECKOUT_API_ERROR = Object.freeze({
   INVALID_REQUEST: "invalid_request",
   GATEWAY: "gateway_error",
+  FORBIDDEN_ORIGIN: "forbidden_origin",
+  UNAVAILABLE: "room_unavailable",
 } as const);
 
 export const CHECKOUT_HTTP_STATUS = Object.freeze({
   OK: 200,
   BAD_REQUEST: 400,
+  FORBIDDEN: 403,
+  CONFLICT: 409,
   BAD_GATEWAY: 502,
 } as const);
+
+/** Reservation status that does NOT block availability (frees the room). */
+export const RESERVATION_STATUS_CANCELLED = "cancelled";

@@ -1,0 +1,6 @@
+############ OP-POC-6 — Log injection (hallazgo NEGATIVO: operaciones no registra logs) ############
+# Busqueda de llamadas a logAuditEvent / AUDIT_ACTIONS en el codigo de operaciones:
+$ grep -rn 'logAuditEvent|AUDIT_ACTIONS' checkout/ reservations/ reservation-lookup/
+--- resultado ---
+(sin coincidencias = operaciones NO escribe auditoria -> no hay sink de log injection en el modulo)
+# Brecha DETECT: creacion/cambio de reservas sin traza. Se cierra en A3.4 (via API de Fabian, con saneo).
