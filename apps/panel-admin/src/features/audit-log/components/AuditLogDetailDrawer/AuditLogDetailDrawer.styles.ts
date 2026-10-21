@@ -5,4 +5,6 @@ export const AUDIT_LOG_DETAIL_DRAWER_STYLES = {
   fieldValue: "text-sm text-default-700",
   metadataLabel: "mb-2 text-sm font-semibold text-default-600",
   metadataWrapper: "space-y-2 rounded-lg bg-default-50 p-3",
+  metadataRow: "flex flex-col gap-0.5 text-sm",
+  metadataValue: "whitespace-pre-wrap break-words text-default-700",
 } as const;

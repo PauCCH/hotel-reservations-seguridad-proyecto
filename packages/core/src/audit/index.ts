@@ -21,9 +21,10 @@ export type { AuditRequestContext } from "./server/getAuditRequestContext";
 export { getAuditRequestContext } from "./server/getAuditRequestContext";
 export { logAuditEvent } from "./server/logAuditEvent";
 export type { AuditEvent, AuditMetadata } from "./shared/types";
+export type { AuditMetadataEntry } from "./shared/utils";
 export {
   buildAuditAction,
   formatAuditTimestamp,
-  formatMetadataHtml,
+  formatMetadataEntries,
   truncateMetadata,
 } from "./shared/utils";

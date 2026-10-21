@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Drawer, useOverlayState } from "@heroui/react";
-import { formatAuditTimestamp, formatMetadataHtml } from "@hotel/core/audit";
+import { formatAuditTimestamp, formatMetadataEntries } from "@hotel/core/audit";
 import { useI18n } from "@/locales";
 import type { AuditLogDetailDrawerProps } from "./AuditLogDetailDrawer.interface";
 import { AUDIT_LOG_DETAIL_DRAWER_STYLES } from "./AuditLogDetailDrawer.styles";
@@ -19,7 +19,7 @@ export function AuditLogDetailDrawer({ isOpen, onClose, row }: AuditLogDetailDra
 
   if (!row) return null;
 
-  const metadataHtml = { __html: formatMetadataHtml(row.metadata) };
+  const metadataEntries = formatMetadataEntries(row.metadata);
 
   return (
     <Drawer.Backdrop
@@ -62,11 +62,20 @@ export function AuditLogDetailDrawer({ isOpen, onClose, row }: AuditLogDetailDra
                 <h3 className={AUDIT_LOG_DETAIL_DRAWER_STYLES.metadataLabel}>
                   {TEXTS.METADATA_LABEL}
                 </h3>
-                <div
-                  className={AUDIT_LOG_DETAIL_DRAWER_STYLES.metadataWrapper}
-                  // biome-ignore lint/security/noDangerouslySetInnerHtml: renders the pre-formatted metadata markup built by formatMetadataHtml
-                  dangerouslySetInnerHTML={metadataHtml}
-                />
+                <div className={AUDIT_LOG_DETAIL_DRAWER_STYLES.metadataWrapper}>
+                  {metadataEntries.length === 0 ? (
+                    <p>—</p>
+                  ) : (
+                    metadataEntries.map(({ key, value }) => (
+                      <div key={key} className={AUDIT_LOG_DETAIL_DRAWER_STYLES.metadataRow}>
+                        <strong>{key}</strong>
+                        <span className={AUDIT_LOG_DETAIL_DRAWER_STYLES.metadataValue}>
+                          {value}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           </Drawer.Body>
