@@ -1,3 +1,4 @@
+import { applySecurityHeaders, prepareSecurityHeaders } from "@hotel/core/security";
 import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
@@ -10,10 +11,29 @@ import { ROUTES } from "@/config/routes";
 import { LOGIN_FORM_ERROR_KEYS } from "./features/auth/constants/loginFormErrorKeys";
 import { LOGIN_FORM_SEARCH_PARAMS } from "./features/auth/constants/loginFormSearchParams";
 
+const IS_DEV = process.env.NODE_ENV === "development";
+const PROTECTED_PREFIX = "/admin";
+
 export async function middleware(request: NextRequest) {
-  const supabaseResponse = NextResponse.next({
-    request,
+  // Per-request nonce CSP + security headers on every page, including /auth/* (P3.2).
+  const { requestHeaders, csp } = prepareSecurityHeaders(request.headers, {
+    isDev: IS_DEV,
+    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
   });
+  const secured = (response: NextResponse) => {
+    applySecurityHeaders(response.headers, csp, IS_DEV);
+    return response;
+  };
+
+  const isProtected =
+    request.nextUrl.pathname === PROTECTED_PREFIX ||
+    request.nextUrl.pathname.startsWith(`${PROTECTED_PREFIX}/`);
+
+  const supabaseResponse = NextResponse.next({ request: { headers: requestHeaders } });
+
+  if (!isProtected) {
+    return secured(supabaseResponse);
+  }
 
   const supabase = createSupabaseServerClient({
     getAll: () => request.cookies.getAll(),
@@ -28,7 +48,7 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.redirect(new URL(ROUTES.AUTH.LOGIN, request.url));
+    return secured(NextResponse.redirect(new URL(ROUTES.AUTH.LOGIN, request.url)));
   }
 
   // Check if the admin account has been deactivated
@@ -45,12 +65,15 @@ export async function middleware(request: NextRequest) {
       LOGIN_FORM_SEARCH_PARAMS.ERROR,
       LOGIN_FORM_ERROR_KEYS.ACCOUNT_DEACTIVATED,
     );
-    return NextResponse.redirect(loginUrl);
+    return secured(NextResponse.redirect(loginUrl));
   }
 
-  return supabaseResponse;
+  return secured(supabaseResponse);
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: [
+    // Every route except static assets, so /auth/* also gets the CSP.
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 };

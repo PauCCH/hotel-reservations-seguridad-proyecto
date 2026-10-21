@@ -12,7 +12,8 @@
     "./booking": "./src/booking/index.ts",
     "./payments": "./src/payments/index.ts",
     "./email": "./src/email/index.ts",
-    "./permissions": "./src/permissions/index.ts"
+    "./permissions": "./src/permissions/index.ts",
+    "./security": "./src/security/index.ts"
   },
   "scripts": {
     "lint": "biome check .",
