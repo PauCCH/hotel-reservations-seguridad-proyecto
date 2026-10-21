@@ -69,7 +69,7 @@ _Última actualización: 2026-10-21_
 
 | Integrante | Módulo | Fase actual | Próxima tarea | Rama activa | Bloqueos |
 |---|---|---|---|---|---|
-| Paula | Autenticación | 2 — Evaluación ofensiva | P2.4 Entregar `auth/fase-2-pocs.md` + evidencias (PR a `develop`) | `security/auth/fase2-pocs` | — (entorno Supabase local montado; capturas AUTH-POC-1/2/4/5/6 hechas) |
+| Paula | Autenticación | 3 — Remediación | P3.3 Parches del vector 3 (AUTH-POC-5 open redirect) + cookies `HttpOnly`/`Secure`/`SameSite` | `security/auth/fase3-xss-csp` (P3.2 commiteado, sin push ni PR; P3.1 en PR #19) | PR #19 espera revisión de Joseph y Aarón (G3.3). Avisar al equipo de la CSP nueva en los 3 `middleware.ts` antes del PR de P3.2 (§4.4) |
 | Joseph | Gestión de Usuarios | 2 — Evaluación ofensiva | J2.1 Vector 1 — servidor (A03 + A01) | — | — |
 | Aarón | Operaciones / Transacciones | 3 — Remediación | Revisión cruzada de PR #16 (G3.3) + A3.7 (video). A3.4 bloqueada | `security/operations/fase3-checkout-rooms-catalog` (PR #16) | A3.4 bloqueada por la util de saneo de Fabian (F3.3/F3.4) |
 | Fabian | Logs / Auditoría | 2 — cerrada, pendiente G2 | Esperar G2 (consolidación del doc de PoCs) hasta que Paula/Joseph/Aarón cierren P2.4/J2.4/A2.4; mientras, puede adelantar Fase 3 (F3.1) | `security/audit/fase2-pocs` | G2 depende de los otros 3 módulos |
@@ -216,7 +216,7 @@ mensajes de error que permiten enumerar usuarios, reflejo de parámetros en pág
 
 **Fase 3**
 - [ ] P3.1 Parches del vector 1 (PR propio).
-- [ ] P3.2 Parches del vector 2 + CSP global (archivo compartido, avisar al equipo).
+- [x] P3.2 Parches del vector 2 + CSP global (archivo compartido, avisar al equipo).
 - [ ] P3.3 Parches del vector 3 + cookies `HttpOnly`/`Secure`/`SameSite`.
 - [ ] P3.4 Auditoría del módulo: eventos de auth saneados vía API de Fabian.
 - [ ] P3.5 Tests de regresión + riesgo residual por hallazgo.
@@ -239,6 +239,8 @@ mensajes de error que permiten enumerar usuarios, reflejo de parámetros en pág
 | 2026-10-20 | P2.4 (parcial) — captura en vivo de AUTH-POC-4: XSS reflejado ejecutándose sobre `/auth/error` (navegador integrado, portal con `.env.local` placeholder) | `security/auth/fase2-pocs` | Hecho; `evidencias/AUTH-POC-4-xss-reflected.jpg`. Faltan capturas de POC-1/2/5/6 (requieren Supabase; sin Docker en la máquina) |
 | 2026-10-21 | P2.4 (capturas en vivo) — montado Supabase local (Docker) y capturadas AUTH-POC-1 (escalamiento de rol, Studio), AUTH-POC-2 (claims JWT + política RLS de `rooms`), AUTH-POC-6 (audit poisoning en `audit_logs`), AUTH-POC-5 (open redirect 303 → `example.com`) | `security/auth/fase2-pocs` | Hecho; evidencias en `auth/evidencias/`. CR/LF literal + spoofing de IP (`x-forwarded-for`) quedan a nivel HTTP (documentados). AUTH-POC-3: evidencia es el test de regresión |
 | 2026-10-19 | P2.3 Vector 3: AUTH-POC-5 (open redirect vía `callbackUrl`, real, O-03) y AUTH-POC-6 (log injection / audit poisoning + IP spoofing en login, real, O-08, solapa AU-R04). CSRF evaluado sin hallazgo (Server Actions validan Origin) | `security/auth/fase2-pocs` | Hecho; ambos reales (sin vuln introducida); capturas en vivo pendientes de entorno; fix P3.3/P3.4 coordinado con Fabian |
+| 2026-10-21 | Rama de P3.2 creada desde `develop` (`91b169c`; PR #19 aún sin merge, por eso este plan no trae las entradas de P3.1) | `security/auth/fase3-xss-csp` | Local (aún sin push). Al mergear #19 habrá conflicto en esta tabla y en §2: conservar ambas versiones |
+| 2026-10-21 | P3.2 — AUTH-POC-4: eliminado el sink (`authErrorHtml.ts` + `dangerouslySetInnerHTML`); `/auth/error` resuelve en servidor una clave de allowlist (`resolveAuthError.ts`) y ya no refleja `error`/`error_description` (cierra también O-04). CSP global con nonce por request (`@hotel/core/security`) + `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, HSTS (prod) en los middlewares de portal, panel (matcher ampliado a todas las rutas; control de sesión sigue solo en `/admin`) y landing; layout del portal dinámico para el nonce | `security/auth/fase3-xss-csp`, commits `caa2f95` (AUTH-POC-4), `ee693e6` (CSP) | Hecho; tests en verde (core 76, portal 58, panel 19). Re-test en vivo: PoC neutralizada y, con el sink de la Fase 2 restaurado a propósito, la CSP bloquea el `onerror` (violación en consola). Build de producción: 17/17 scripts con nonce, 0 violaciones, login OK. Evidencias: `P3.2-AUTH-POC-4-retest.txt`, `P3.2-AUTH-POC-4-fixed.jpg`, `P3.2-AUTH-POC-4-csp-blocks-sink.jpg`. Riesgo residual propuesto: Bajo |
 
 ---
 
