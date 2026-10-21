@@ -36,7 +36,13 @@ vi.mock("@hotel/db", () => ({
 }));
 
 vi.mock("../../audit", () => ({
-  AUDIT_ACTIONS: { AUTH_LOGIN_SUCCESS: "auth.login.success", AUTH_LOGIN_FAILED: "auth.login.failed" },
+  AUDIT_ACTIONS: {
+    AUTH_LOGIN_SUCCESS: "auth.login.success",
+    AUTH_LOGIN_FAILED: "auth.login.failed",
+  },
+}));
+
+vi.mock("../../audit/server", () => ({
   logAuditEvent: mockLogAuditEvent,
   getAuditRequestContext: mockGetAuditRequestContext,
 }));

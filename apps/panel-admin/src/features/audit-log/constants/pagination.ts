@@ -1,4 +1,6 @@
 export const AUDIT_LOG_PAGE_SIZE = 25;
+export const AUDIT_LOG_MAX_PAGE_SIZE = 100;
+export const AUDIT_LOG_MAX_SEARCH_LENGTH = 100;
 
 export const AUDIT_LOG_PAGINATION_MAX_VISIBLE_PAGES = 7 as const;
 export const AUDIT_LOG_PAGINATION_ELLIPSIS_THRESHOLD = 3 as const;

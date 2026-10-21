@@ -1,6 +1,7 @@
 "use server";
 
-import { AUDIT_ACTIONS, getAuditRequestContext, logAuditEvent } from "@hotel/core/audit";
+import { AUDIT_ACTIONS } from "@hotel/core/audit";
+import { getAuditRequestContext, logAuditEvent } from "@hotel/core/audit/server";
 import { hasRole, verifyAdminRole } from "@hotel/core/auth";
 import { createSupabaseServerClient, DB_COLUMNS, DB_ENUMS, DB_TABLES } from "@hotel/db";
 import { cookies } from "next/headers";

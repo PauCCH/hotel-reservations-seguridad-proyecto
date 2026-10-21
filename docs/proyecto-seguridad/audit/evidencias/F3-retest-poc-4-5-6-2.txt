@@ -1,0 +1,60 @@
+Re-test de PoCs de Fase 2 contra el código parcheado (Fase 3)
+=============================================================
+
+Fecha: 2026-10-21. Rama security/audit/fase3-parches-v1 (commits 56c053c, 4d567eb,
+e291cac, c527a5f). panel-admin en localhost:3002, AUDIT_TRUSTED_PROXY_HOPS=0.
+Base de datos: Supabase remoto del proyecto SIN las migraciones 20260922000003/4
+aplicadas (append-only y hash encadenado se probaron solo en Postgres 17 local).
+Navegador: Playwright + Chromium. Sesión: owner@hotel.local.
+
+Las inyecciones se enviaron al endpoint de login con el cuerpo reemplazado en la
+petición (la validación de email del formulario es solo de cliente: "Ingresá un
+email válido" bloquea el payload en la UI, igual que en Fase 2).
+
+AUD-POC-4 (XSS stored) — NEUTRALIZADA
+  Payload: <img src=x onerror="document.title='AUD-POC-4-F3-RETEST'">
+  Drawer de detalle (captura F3.2-xss-neutralized-drawer.png):
+    <img> en el drawer ........ 0
+    atributos [onerror] ....... 0
+    document.title ............ "Panel de Administración" (sin cambios)
+    innerHTML del valor ....... &lt;img src=x onerror="document.title='AUD-POC-4-F3-RETEST'"&gt;
+  Antes (Fase 2): título cambiaba a "AUD-POC-4-XSS-v2" y el <img> se creaba.
+
+AUD-POC-5 (IP spoofing) — NEUTRALIZADA
+  Cabecera: X-Forwarded-For: 203.0.113.250, NOT-AN-IP-ADDRESS
+  getAuditLogs({search:"retest"}) -> ip_address = null en las 3 filas nuevas.
+  "203.0.113.250" no aparece en la respuesta.
+  Antes (Fase 2): ip_address = "203.0.113.250".
+
+AUD-POC-6 (log injection CRLF) — MITIGADA
+  Email con \r\n + "[FORGED] ... action=audit.log.purged actor=owner@hotel.local ..."
+  Fila nueva: CR/LF reemplazados por espacios; actor y metadata.email quedan en una
+  sola línea (captura F3.3-crlf-neutralized-drawer.png). En el DOM, el botón de la
+  fila vieja de Fase 2 conserva "\r\n" literal; el de la fila nueva tiene espacios.
+  Residual: el texto fabricado sigue visible dentro del campo, pero ya no puede
+  presentarse como una entrada de log separada.
+
+AUD-POC-2 (inyección en search) — NEUTRALIZADA
+  search = x%,actor_email.neq.""
+    Antes (Fase 2): devolvía todas las filas.
+    Ahora: total = 0, igual que la línea base "zzz_nonexistent_zzz" (total = 0).
+
+AUD-POC-3 (pageSize sin tope) — cubierta por test unitario
+  pageSize = 100000 responde 200 con total = 46 (< 100), por lo que el tope de 100
+  no es observable con este volumen de datos; se verifica en
+  apps/panel-admin/tests/audit-log/getAuditLogs.test.ts.
+
+AUD-POC-1 (acceso sin audit:view) — NEUTRALIZADA (re-probada después)
+  Cuenta: vargasarayafabian11@gmail.com (rol admin activo, SIN audit:view; la misma
+  de Fase 2). Sesión iniciada en el navegador (Playwright + Chromium).
+  UI: /admin/audit-log muestra "403 Acceso Restringido" y el menú no lista Auditoría.
+  Ataque directo, como en Fase 2 (sin pasar por la UI):
+    POST /admin/audit-log, Next-Action: 7fbeb276649f58679593a78c99fbb7b69e00cceabf
+    (id de getAuditLogs en esta compilación), body [{"page":1,"pageSize":5}]
+  Respuesta: HTTP 500 con el error serializado
+    name = "PermissionDeniedError", message = "Permission denied: audit:view"
+    lanzado desde requirePermission (src/shared/auth/requirePermission.ts)
+  Filas devueltas: 0; "owner@hotel.local" no aparece en la respuesta.
+  Antes (Fase 2): HTTP 200 con el log completo (total: 14).
+  Nota: el estado es 500 y no 403 porque la acción lanza una excepción; lo que
+  cuenta es que no se entrega ningún dato. En dev la respuesta incluye el stack.

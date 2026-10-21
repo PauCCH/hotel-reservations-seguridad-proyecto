@@ -1,17 +1,20 @@
 "use server";
 
-import {
-  AUDIT_ACTIONS,
-  AUDIT_ENTITIES,
-  getAuditRequestContext,
-  logAuditEvent,
-} from "@hotel/core/audit";
+import { AUDIT_ACTIONS, AUDIT_ENTITIES } from "@hotel/core/audit";
+import { getAuditRequestContext, logAuditEvent } from "@hotel/core/audit/server";
 import { verifyAdminRole } from "@hotel/core/auth";
 import { createSupabaseServerClient, createSupabaseServiceClient, DB_TABLES } from "@hotel/db";
 import type { AuditLogEntry } from "@hotel/db/types";
 import { cookies } from "next/headers";
-import { AUDIT_LOG_PAGE_SIZE } from "@/features/audit-log/constants/pagination";
+import {
+  sanitizeAction,
+  sanitizeDate,
+  sanitizePage,
+  sanitizePageSize,
+  sanitizeSearch,
+} from "@/features/audit-log/utils/sanitizeAuditLogParams";
 import { AuthenticationRequiredError, PermissionDeniedError } from "@/shared/auth/errors";
+import { requirePermission } from "@/shared/auth/requirePermission";
 import { PERMISSIONS } from "@/shared/constants/permissions";
 
 export interface GetAuditLogsParams {
@@ -43,18 +46,26 @@ export const getAuditLogs = async (
   const admin = await verifyAdminRole(session.user.id);
   if (!admin) throw new PermissionDeniedError(PERMISSIONS.AUDIT.VIEW);
 
-  const page = params.page ?? 1;
-  const pageSize = params.pageSize ?? AUDIT_LOG_PAGE_SIZE;
+  await requirePermission(PERMISSIONS.AUDIT.VIEW);
+
+  const page = sanitizePage(params.page);
+  const pageSize = sanitizePageSize(params.pageSize);
+  const search = sanitizeSearch(params.search);
+  const action = sanitizeAction(params.action);
+  const from = sanitizeDate(params.from);
+  const to = sanitizeDate(params.to);
   const offset = (page - 1) * pageSize;
 
   const supabase = createSupabaseServiceClient();
   let query = supabase.from(DB_TABLES.AUDIT_LOGS).select("*", { count: "exact" });
 
-  if (params.action) query = query.eq("action", params.action);
-  if (params.from) query = query.gte("created_at", params.from);
-  if (params.to) query = query.lte("created_at", params.to);
-  if (params.search) {
-    query = query.or(`action.ilike.%${params.search}%,actor_email.ilike.%${params.search}%`);
+  if (action) query = query.eq("action", action);
+  if (from) query = query.gte("created_at", from);
+  if (to) query = query.lte("created_at", to);
+  if (search) {
+    // `search` only contains allowlisted characters, so it cannot close the
+    // pattern or introduce extra PostgREST conditions.
+    query = query.or(`action.ilike.%${search}%,actor_email.ilike.%${search}%`);
   }
 
   const { data, error, count } = await query
@@ -70,7 +81,7 @@ export const getAuditLogs = async (
     actorEmail: session.user.email,
     action: AUDIT_ACTIONS.AUDIT_LOG_VIEWED,
     entity: AUDIT_ENTITIES.AUDIT_LOGS,
-    metadata: { page, pageSize, search: params.search ?? null, action: params.action ?? null },
+    metadata: { page, pageSize, search: search ?? null, action: action ?? null },
     ipAddress,
     userAgent,
   });

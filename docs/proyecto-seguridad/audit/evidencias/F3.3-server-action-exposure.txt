@@ -1,0 +1,46 @@
+Hallazgo nuevo de Fase 3: logAuditEvent expuesto como Server Action pública
+===========================================================================
+
+Fecha: 2026-10-21. Detectado al preparar la guía de la API (F3.4). NO estaba en
+fase-1-diagnostico.md (AU-S01 decía "cualquier código del servidor puede escribir"
+y no consideraba que el archivo fuera invocable desde HTTP).
+
+Causa raíz
+  packages/core/src/audit/server/logAuditEvent.ts y getAuditRequestContext.ts
+  empezaban con la directiva "use server". En Next.js, TODA función exportada de
+  un archivo "use server" se registra como Server Action: un endpoint HTTP
+  invocable por cualquiera que conozca su id (visible en el bundle del cliente y
+  en .next/server/server-reference-manifest.json), sin sesión ni permisos.
+
+ANTES (código de c527a5f, sin sesión)
+  Manifiesto: logAuditEvent -> id 4075680fd1fc667ea1205f01343208801819303d24
+  curl -X POST localhost:3002/auth/login -H 'Next-Action: 4075680f…3d24' \
+    --data '[{"actorEmail":"owner@hotel.local","action":"audit.log.purged",
+              "entity":"audit_logs","metadata":{"note":"F3 forged event via public server action, no session"}}]'
+  -> HTTP 200
+  getAuditLogs({search:"purged"}) (sesión owner) devuelve la fila:
+    actor_email = owner@hotel.local, action = audit.log.purged, entity = audit_logs
+    id 838f2471-90f5-4601-8950-e08d06872105, creada sin sesión.
+  La sanitización de F3.3a no lo evita: normaliza el texto pero no puede saber que
+  el llamante es legítimo. Cualquier anónimo podía fabricar eventos atribuidos a
+  cualquier actor (AU-R04 / AU-R05 por otra vía).
+
+PARCHE
+  - Se elimina "use server" de logAuditEvent.ts y getAuditRequestContext.ts.
+  - Nuevo punto de entrada solo-servidor: @hotel/core/audit/server
+    (packages/core/src/audit/server/index.ts + export en package.json).
+  - @hotel/core/audit queda client-safe: constantes, tipos y formateadores.
+  - Consumidores actualizados: panel-admin loginAction, getAuditLogs y
+    packages/core/src/auth/server/loginAction.ts.
+  - Test de contrato (server-boundary.test.ts) que falla si vuelve la directiva
+    o si el index client-safe reexporta el escritor.
+
+DESPUÉS (arranque limpio, .next borrado)
+  curl con el MISMO Next-Action id, sin sesión -> HTTP 404 "Server action not found."
+  getAuditLogs({search:"purged"}) no contiene ninguna fila "F3 retest after fix".
+  Flujo legítimo intacto: login de owner@hotel.local registra auth.login.success y
+  el visor sigue funcionando.
+
+Nota: la fila 838f2471-… (evento falsificado de la demostración) quedó en el
+Supabase remoto. Es evidencia; borrarla requiere SQL manual, porque la
+migración append-only (20260922000003) aún no está aplicada en el remoto.

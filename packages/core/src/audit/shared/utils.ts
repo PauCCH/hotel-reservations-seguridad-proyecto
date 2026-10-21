@@ -60,28 +60,25 @@ export function formatAuditTimestamp(iso: string, locale = "en-US"): string {
   }).format(date);
 }
 
+export interface AuditMetadataEntry {
+  key: string;
+  value: string;
+}
+
 /**
- * Renders metadata as a "rich" HTML summary: bold keys, highlighted values,
- * pretty-printed nested objects. Values are interpolated as-is (no HTML
- * escaping) so the consumer can opt into `dangerouslySetInnerHTML`.
+ * Turns metadata into plain `{ key, value }` text pairs for display. Values
+ * are returned raw: consumers MUST render them as text nodes (JSX children),
+ * never as HTML, so log content can't execute in the viewer.
  *
  * @example
  * ```ts
- * formatMetadataHtml({ email: "a@b.com" });
- * // '<div class="audit-meta-row"><strong>email</strong><span class="audit-meta-value">a@b.com</span></div>'
+ * formatMetadataEntries({ email: "a@b.com" }); // [{ key: "email", value: "a@b.com" }]
  * ```
  */
-export function formatMetadataHtml(metadata: AuditMetadata): string {
-  const entries = Object.entries(metadata ?? {});
-  if (entries.length === 0) return `<p class="audit-meta-empty">—</p>`;
-
-  return entries
-    .map(([key, value]) => {
-      const rendered =
-        typeof value === "object" && value !== null
-          ? JSON.stringify(value, null, 2)
-          : String(value);
-      return `<div class="audit-meta-row"><strong>${key}</strong><span class="audit-meta-value">${rendered}</span></div>`;
-    })
-    .join("");
+export function formatMetadataEntries(metadata: AuditMetadata): AuditMetadataEntry[] {
+  return Object.entries(metadata ?? {}).map(([key, value]) => ({
+    key,
+    value:
+      typeof value === "object" && value !== null ? JSON.stringify(value, null, 2) : String(value),
+  }));
 }

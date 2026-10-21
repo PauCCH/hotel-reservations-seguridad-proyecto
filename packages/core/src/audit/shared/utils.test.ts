@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildAuditAction,
   formatAuditTimestamp,
-  formatMetadataHtml,
+  formatMetadataEntries,
   truncateMetadata,
 } from "./utils";
 
@@ -53,24 +53,33 @@ describe("formatAuditTimestamp", () => {
   });
 });
 
-describe("formatMetadataHtml", () => {
-  it("returns an empty-state marker for empty metadata", () => {
-    expect(formatMetadataHtml({})).toBe('<p class="audit-meta-empty">—</p>');
+describe("formatMetadataEntries", () => {
+  it("returns no entries for empty or missing metadata", () => {
+    expect(formatMetadataEntries({})).toEqual([]);
+    expect(formatMetadataEntries(undefined as never)).toEqual([]);
   });
 
-  it("renders one audit-meta-row div per entry with bold keys", () => {
-    const result = formatMetadataHtml({ email: "a@b.com", page: 2 });
-    expect(result).toBe(
-      '<div class="audit-meta-row"><strong>email</strong><span class="audit-meta-value">a@b.com</span></div>' +
-        '<div class="audit-meta-row"><strong>page</strong><span class="audit-meta-value">2</span></div>',
-    );
+  it("returns plain key/value text pairs, stringifying primitives", () => {
+    expect(formatMetadataEntries({ email: "a@b.com", page: 2, flag: false })).toEqual([
+      { key: "email", value: "a@b.com" },
+      { key: "page", value: "2" },
+      { key: "flag", value: "false" },
+    ]);
   });
 
   it("pretty-prints nested object values", () => {
-    const result = formatMetadataHtml({ context: { requireAdmin: true } });
-    const expectedRendered = JSON.stringify({ requireAdmin: true }, null, 2);
-    expect(result).toBe(
-      `<div class="audit-meta-row"><strong>context</strong><span class="audit-meta-value">${expectedRendered}</span></div>`,
-    );
+    expect(formatMetadataEntries({ context: { requireAdmin: true } })).toEqual([
+      { key: "context", value: JSON.stringify({ requireAdmin: true }, null, 2) },
+    ]);
+  });
+
+  it("never escapes or alters markup: output is raw text for a text-node renderer", () => {
+    const payload = "<img src=x onerror=alert(1)>";
+    expect(formatMetadataEntries({ email: payload })).toEqual([{ key: "email", value: payload }]);
+  });
+
+  it("exposes no HTML-building helper", async () => {
+    const mod = await import("./utils");
+    expect("formatMetadataHtml" in mod).toBe(false);
   });
 });

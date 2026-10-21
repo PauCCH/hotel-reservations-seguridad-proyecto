@@ -51,14 +51,10 @@ vi.mock("@hotel/core/auth", async () => {
   };
 });
 
-vi.mock("@hotel/core/audit", async () => {
-  const actual = await vi.importActual<typeof import("@hotel/core/audit")>("@hotel/core/audit");
-  return {
-    ...actual,
-    logAuditEvent: mockLogAuditEvent,
-    getAuditRequestContext: mockGetAuditRequestContext,
-  };
-});
+vi.mock("@hotel/core/audit/server", () => ({
+  logAuditEvent: mockLogAuditEvent,
+  getAuditRequestContext: mockGetAuditRequestContext,
+}));
 
 vi.mock("@hotel/db", async () => {
   const actual = await vi.importActual<typeof import("@hotel/db")>("@hotel/db");

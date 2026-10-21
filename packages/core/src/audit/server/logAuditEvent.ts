@@ -1,15 +1,17 @@
-"use server";
-
 /**
  * @fileoverview Server-side audit event writer.
  *
  * Records one row in `audit_logs` via the service-role Supabase client.
+ * Deliberately NOT a Server Action (no "use server"): that would expose it as a
+ * public HTTP endpoint any client could use to forge audit events. Import it
+ * only from server code via `@hotel/core/audit/server`.
  * Never throws into the caller — a failed audit write must not break the
  * flow that triggered it (e.g. login).
  *
  * @example
  * ```ts
- * import { AUDIT_ACTIONS, logAuditEvent } from "@hotel/core/audit";
+ * import { AUDIT_ACTIONS } from "@hotel/core/audit";
+ * import { logAuditEvent } from "@hotel/core/audit/server";
  *
  * await logAuditEvent({
  *   actorId: user.id,
@@ -21,6 +23,7 @@
 
 import type { Json } from "@hotel/db";
 import { createSupabaseServiceClient, DB_TABLES } from "@hotel/db";
+import { sanitizeAuditIp, sanitizeAuditMetadata, sanitizeAuditText } from "../shared/sanitize";
 import type { AuditEvent } from "../shared/types";
 
 /**
@@ -33,13 +36,13 @@ export async function logAuditEvent(event: AuditEvent): Promise<void> {
 
     const { error } = await supabase.from(DB_TABLES.AUDIT_LOGS).insert({
       actor_id: event.actorId ?? null,
-      actor_email: event.actorEmail ?? null,
-      action: event.action,
-      entity: event.entity ?? null,
-      entity_id: event.entityId ?? null,
-      metadata: (event.metadata ?? {}) as Json,
-      ip_address: event.ipAddress ?? null,
-      user_agent: event.userAgent ?? null,
+      actor_email: sanitizeAuditText(event.actorEmail),
+      action: sanitizeAuditText(event.action) ?? event.action,
+      entity: sanitizeAuditText(event.entity),
+      entity_id: sanitizeAuditText(event.entityId),
+      metadata: sanitizeAuditMetadata(event.metadata) as Json,
+      ip_address: sanitizeAuditIp(event.ipAddress),
+      user_agent: sanitizeAuditText(event.userAgent),
     });
 
     if (error) {

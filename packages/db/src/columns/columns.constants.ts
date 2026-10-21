@@ -13,6 +13,9 @@ export const DB_COLUMNS: DBTablesWithColumns = {
     ip_address: "ip_address",
     user_agent: "user_agent",
     created_at: "created_at",
+    seq: "seq",
+    prev_hash: "prev_hash",
+    row_hash: "row_hash",
   },
   amenities: {
     created_at: "created_at",
