@@ -32,6 +32,7 @@ import type { Session } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { verifyAdminRole } from "../index";
 import type { AdminProfile, AuthState, ClientProfile } from "../shared/types";
+import { getVerifiedSession } from "./getVerifiedSession";
 
 /**
  * Cookie store interface for server clients.
@@ -68,20 +69,8 @@ export async function getServerAuthContext(cookieStore?: CookieStore): Promise<S
   const store = cookieStore ?? (await cookies());
   const supabase = createSupabaseServerClient(store);
 
-  const { data, error } = await supabase.auth.getSession();
-
-  if (error) {
-    console.error("[getServerAuthContext] Session error:", error.message);
-    return {
-      session: null,
-      user: null,
-      profile: null,
-      isAdmin: false,
-    };
-  }
-
-  const session = (data.session ?? null) as Session | null;
-  const user = session?.user ?? null;
+  // getUser() verifies the JWT against Supabase Auth; getSession() alone does not (AUTH-POC-2).
+  const { session, user } = await getVerifiedSession(supabase);
 
   // Fetch profile based on user existence
   let profile: AdminProfile | ClientProfile | null = null;

@@ -1,6 +1,6 @@
 "use server";
 
-import { AUTH_ROLES } from "@hotel/core/auth";
+import { AUTH_ROLES, getVerifiedSession } from "@hotel/core/auth";
 import { getUserPermissions } from "@hotel/core/permissions";
 import { createSupabaseServerClient, DB_COLUMNS, DB_TABLES } from "@hotel/db";
 import type { PermissionName } from "@hotel/db/types";
@@ -11,16 +11,14 @@ async function getCurrentUserId(): Promise<string> {
   const cookieStore = await cookies();
   const supabase = createSupabaseServerClient(cookieStore);
 
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
+  // getUser() verifies the JWT against Supabase Auth; getSession() alone does not (AUTH-POC-2).
+  const { user } = await getVerifiedSession(supabase);
 
-  if (error || !session?.user) {
+  if (!user) {
     throw new AuthenticationRequiredError();
   }
 
-  return session.user.id;
+  return user.id;
 }
 
 async function isOwner(userId: string): Promise<boolean> {

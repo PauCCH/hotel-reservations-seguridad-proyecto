@@ -79,6 +79,8 @@ export type {
 export { getInitialAuthStatus, getServerAuthContext } from "./server/getServerAuthContext";
 export { loginAction, loginFormAction } from "./server/loginAction";
 export { getAuthContextAction, refreshSession } from "./server/refreshSession";
+export type { VerifiedSession } from "./server/getVerifiedSession";
+export { getVerifiedSession } from "./server/getVerifiedSession";
 export { redirectToLogin, signOutAction } from "./server/signOutAction";
 
 // ============================================================================

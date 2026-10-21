@@ -16,10 +16,10 @@
  */
 
 import { createSupabaseServerClient } from "@hotel/db";
-import type { Session } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { verifyAdminRole } from "../index";
 import type { AdminProfile, AuthState, ClientProfile } from "../shared/types";
+import { getVerifiedSession } from "./getVerifiedSession";
 
 /**
  * Server action: force refresh session from server.
@@ -38,21 +38,8 @@ export async function refreshSession(): Promise<AuthState> {
   const cookieStore = await cookies();
   const supabase = createSupabaseServerClient(cookieStore);
 
-  const { data, error } = await supabase.auth.getSession();
-
-  if (error) {
-    console.error("[refreshSession] Error:", error.message);
-    return {
-      session: null,
-      user: null,
-      profile: null,
-      isAdmin: false,
-      isLoading: false,
-    };
-  }
-
-  const session = (data.session ?? null) as Session | null;
-  const user = session?.user ?? null;
+  // getUser() verifies the JWT against Supabase Auth; getSession() alone does not (AUTH-POC-2).
+  const { session, user } = await getVerifiedSession(supabase);
 
   let profile: AdminProfile | ClientProfile | null = null;
   let isAdmin = false;
