@@ -1,0 +1,67 @@
+AUTH-POC-3 — Re-test tras el parche P3.1 (inyección en filtro PostgREST, introducida)
+Entorno: Supabase local (http://127.0.0.1:54321), consultas con service-role (la que usa
+lookupAccount). Fecha: 2026-10-21.
+Rama: security/auth/fase3-parches, commit b5e546b (+ caso de test nuevo, ver §3)
+Antes (Fase 2): evidencias/AUTH-POC-3-vitest.txt
+Apikeys redactadas; es un entorno local de prueba.
+
+========================================================================
+1) ANTES — filtro que armaba el código vulnerable, ejecutado en vivo
+========================================================================
+Hallazgo del re-test: el payload documentado en la Fase 2
+(name = "a,is_active.eq.true", accountId = "none") NO vuelca la tabla en vivo:
+
+  filtro: full_name.ilike.%a,is_active.eq.true%,id.eq.none
+  -> {"code":"22P02","message":"invalid input syntax for type boolean: \"true%\""}
+  (y con accountId = "none" también falla: "invalid input syntax for type uuid")
+
+El test de la Fase 2 solo comparaba el string del filtro; nunca lo ejecutó.
+Payload que SÍ explota la inyección (cierra el ilike y deja `is_active.eq.true` limpio):
+
+  name      = zzz,is_active.eq.true,full_name.ilike.zzz
+  accountId = 00000000-0000-0000-0000-000000000000
+  filtro    = full_name.ilike.%zzz,is_active.eq.true,full_name.ilike.zzz%,id.eq.00000000-0000-0000-0000-000000000000
+
+  Control (name = "zzz-no-existe"): filas devueltas: 0
+  Ataque:                           filas devueltas: 7   <-- todos los perfiles
+     a6e5fd27... Hotel Owner   True
+     d5171080... Admin User    True
+     63e6f56e... Nuevo Admin   True
+     b1ca52b5... Manager       True
+     2d163317... Mallory       True
+     5447f7b7... Mallory       True
+     8173f849... Invited Admin True
+
+========================================================================
+2) DESPUÉS — consulta que arma el código parchado con el mismo payload
+========================================================================
+lookupAccount ya no usa .or(): valida accountId como UUID, filtra con
+.eq('id', accountId) y compara el nombre exacto en código.
+
+  GET /rest/v1/profiles?id=eq.00000000-0000-0000-0000-000000000000
+  -> filas devueltas: 0                       => la función retorna []   ✅
+
+  El nombre ya no entra en la consulta. Aun con el id de una cuenta real
+  (2d163317…, "Mallory") la consulta trae 1 fila y el código la descarta
+  porque "mallory" != "zzz,is_active.eq.true,full_name.ilike.zzz".
+
+  Inyección vía accountId: id=eq.<uuid>,is_active.eq.true
+  -> {"code":"22P02","message":"invalid input syntax for type uuid: ..."}
+     (además la función la rechaza antes de consultar: no es un UUID)
+
+========================================================================
+3) TEST DE REGRESIÓN — apps/portal-reservas/.../lookupAccount.server.test.ts
+========================================================================
+ ✓ filters only with a parameterized .eq() on the account id (no .or() string)
+ ✓ neutralizes the Fase 2 payload: injected filter syntax returns nothing
+ ✓ neutralizes the payload that dumped every profile live (valid UUID + OR clause)
+ ✓ rejects a non-UUID accountId carrying filter syntax before querying
+ ✓ does not treat LIKE wildcards in the name as patterns
+ ✓ returns nothing when the name does not match the account
+ Tests  6 passed (6)
+
+========================================================================
+RESULTADO: se eliminó la causa raíz (no hay strings de filtro con input
+del usuario). El payload que en vivo devolvía los 7 perfiles ahora no
+devuelve nada. Riesgo residual propuesto: Bajo.
+El payload de AUTH-POC-3 en fase-2-pocs.md se corrigió con el de §1.

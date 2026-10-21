@@ -69,7 +69,7 @@ _Última actualización: 2026-10-21_
 
 | Integrante | Módulo | Fase actual | Próxima tarea | Rama activa | Bloqueos |
 |---|---|---|---|---|---|
-| Paula | Autenticación | 2 — Evaluación ofensiva | P2.4 Entregar `auth/fase-2-pocs.md` + evidencias (PR a `develop`) | `security/auth/fase2-pocs` | — (entorno Supabase local montado; capturas AUTH-POC-1/2/4/5/6 hechas) |
+| Paula | Autenticación | 3 — Remediación | P3.2 Parches del vector 2 (AUTH-POC-4) + CSP global (avisar al equipo) | `security/auth/fase3-parches` (PR #19, en revisión) | PR #19 espera revisión de Joseph (`requirePermission`, invitaciones) y Aarón (RLS de `rooms`) — G3.3. P3.2 irá en una rama nueva desde `develop` |
 | Joseph | Gestión de Usuarios | 2 — Evaluación ofensiva | J2.1 Vector 1 — servidor (A03 + A01) | — | — |
 | Aarón | Operaciones / Transacciones | 3 — Remediación | Revisión cruzada de PR #16 (G3.3) + A3.7 (video). A3.4 bloqueada | `security/operations/fase3-checkout-rooms-catalog` (PR #16) | A3.4 bloqueada por la util de saneo de Fabian (F3.3/F3.4) |
 | Fabian | Logs / Auditoría | 2 — cerrada, pendiente G2 | Esperar G2 (consolidación del doc de PoCs) hasta que Paula/Joseph/Aarón cierren P2.4/J2.4/A2.4; mientras, puede adelantar Fase 3 (F3.1) | `security/audit/fase2-pocs` | G2 depende de los otros 3 módulos |
@@ -212,10 +212,10 @@ mensajes de error que permiten enumerar usuarios, reflejo de parámetros en pág
 - [x] P2.1 Vector 1 — servidor: inyección (A03) y control de acceso / confianza en JWT (A01).
 - [x] P2.2 Vector 2 — cliente: XSS reflected/stored en flujos de auth.
 - [x] P2.3 Vector 3 — CSRF / manipulación de parámetros (A08) y log injection en eventos de login.
-- [ ] P2.4 Entregar `auth/fase-2-pocs.md` + evidencias.
+- [x] P2.4 Entregar `auth/fase-2-pocs.md` + evidencias.
 
 **Fase 3**
-- [ ] P3.1 Parches del vector 1 (PR propio).
+- [x] P3.1 Parches del vector 1 (PR propio).
 - [ ] P3.2 Parches del vector 2 + CSP global (archivo compartido, avisar al equipo).
 - [ ] P3.3 Parches del vector 3 + cookies `HttpOnly`/`Secure`/`SameSite`.
 - [ ] P3.4 Auditoría del módulo: eventos de auth saneados vía API de Fabian.
@@ -239,6 +239,12 @@ mensajes de error que permiten enumerar usuarios, reflejo de parámetros en pág
 | 2026-10-20 | P2.4 (parcial) — captura en vivo de AUTH-POC-4: XSS reflejado ejecutándose sobre `/auth/error` (navegador integrado, portal con `.env.local` placeholder) | `security/auth/fase2-pocs` | Hecho; `evidencias/AUTH-POC-4-xss-reflected.jpg`. Faltan capturas de POC-1/2/5/6 (requieren Supabase; sin Docker en la máquina) |
 | 2026-10-21 | P2.4 (capturas en vivo) — montado Supabase local (Docker) y capturadas AUTH-POC-1 (escalamiento de rol, Studio), AUTH-POC-2 (claims JWT + política RLS de `rooms`), AUTH-POC-6 (audit poisoning en `audit_logs`), AUTH-POC-5 (open redirect 303 → `example.com`) | `security/auth/fase2-pocs` | Hecho; evidencias en `auth/evidencias/`. CR/LF literal + spoofing de IP (`x-forwarded-for`) quedan a nivel HTTP (documentados). AUTH-POC-3: evidencia es el test de regresión |
 | 2026-10-19 | P2.3 Vector 3: AUTH-POC-5 (open redirect vía `callbackUrl`, real, O-03) y AUTH-POC-6 (log injection / audit poisoning + IP spoofing en login, real, O-08, solapa AU-R04). CSRF evaluado sin hallazgo (Server Actions validan Origin) | `security/auth/fase2-pocs` | Hecho; ambos reales (sin vuln introducida); capturas en vivo pendientes de entorno; fix P3.3/P3.4 coordinado con Fabian |
+| 2026-10-21 | P2.4 Entrega de la Fase 2 (6 PoCs + evidencias) | `security/auth/fase2-pocs`, PR #17 (merge `9c1d10d`) | Mergeado a `develop`; Fase 2 cerrada |
+| 2026-10-21 | Rama de Fase 3 creada desde `develop` (`91b169c`) | `security/auth/fase3-parches` | Publicada en `origin` |
+| 2026-10-21 | P3.1 (código) — AUTH-POC-1: `handle_new_user` ignora `raw_user_meta_data.role` (solo `app_metadata`, default `client`); invitaciones promovidas con `promote_invited_admin()` (solo `service_role`); `createAdminAccountAction` exige `admins:invite`; se elimina `sync_role_to_jwt`. AUTH-POC-2: RLS de `rooms`/`room_schedules`/`room_images` usan `is_admin_or_owner()`; lecturas de sesión en servidor vía `getVerifiedSession()` (`getUser()`). AUTH-POC-3: `lookupAccount` sin `.or()` (UUID + `.eq()`, nombre comparado en código) | `security/auth/fase3-parches`, commits `1ef0b61` (POC-1), `e1994f9` (POC-2), `b5e546b` (POC-3); migraciones `20261021000001`, `20261021000002` | Código hecho; tests en verde (core 71, portal 60, panel 19) y sin errores nuevos de type-check. Re-test en vivo hecho (ver entrada siguiente); PR pendiente |
+| 2026-10-21 | P3.1 (re-test en vivo) — Supabase local levantado; aplicadas 6 migraciones pendientes (4 de `develop` + las 2 de P3.1). AUTH-POC-1: mismo signup con `role:"admin"` queda `client`; invitación + `promote_invited_admin` sigue creando admin; `anon`/`authenticated` reciben `permission denied`. AUTH-POC-2: `client` actualiza 0 filas de `rooms`, admin 1; token forjado rechazado por `getUser()` (403 `bad_jwt`). AUTH-POC-3: payload corregido vuelca 7/7 perfiles con el código vulnerable y 0 con el parche; nuevo caso de test | `security/auth/fase3-parches`, commits `858546d` (test), `53396aa` (evidencias) | Hecho; `evidencias/P3.1-AUTH-POC-{1,2,3}-retest.txt`. Riesgo residual propuesto: Bajo para POC-1, POC-2(a) y POC-3; Medio para POC-2(b) mientras `getAuditLogs.ts` (Fabian) y `admins-table/permissions.ts` (Joseph) usen `getSession()`. Pendiente: bajar a mano `attacker-escalation@poc.local` (escalada en Fase 2) |
+| 2026-10-21 | Corrección de AUTH-POC-3 en `fase-2-pocs.md`: el payload documentado (`a,is_active.eq.true`, `accountId="none"`) fallaba en vivo con `22P02`; reemplazado por uno que sí vuelca la tabla y enlazada la evidencia en vivo | `security/auth/fase3-parches`, commit `53396aa` | Hecho; avisar a Fabian antes de G2 (documento de PoCs consolidado) |
+| 2026-10-21 | PR de P3.1 abierto contra `develop` (parches AUTH-POC-1/2/3 + re-test en vivo + corrección de AUTH-POC-3 en Fase 2); revisores pedidos: Joseph y Aarón (cambios en sus archivos, G3.3); nota a Fabian (`getSession()` en `getAuditLogs.ts`, payload corregido para G2) | `security/auth/fase3-parches`, PR #19 (commits `1ef0b61` … `4a3f0df`) | Abierto, pendiente de revisión y merge (hito H3) |
 
 ---
 

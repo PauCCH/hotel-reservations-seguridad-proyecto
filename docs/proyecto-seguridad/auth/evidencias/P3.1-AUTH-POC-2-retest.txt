@@ -1,0 +1,66 @@
+AUTH-POC-2 — Re-test tras el parche P3.1 (confianza en claims del JWT / sesión no verificada)
+Entorno: Supabase local (http://127.0.0.1:54321). Fecha: 2026-10-21.
+Rama: security/auth/fase3-parches, commit e1994f9
+Migración aplicada: 20261021000002_auth_rls_business_role.sql
+Antes (Fase 2): evidencias/AUTH-POC-2-rls-policy.txt
+Tokens y apikeys redactados; es un entorno local de prueba.
+
+========================================================================
+(a) RLS — POLÍTICAS DE rooms / room_schedules / room_images (pg_policies)
+========================================================================
+                     policyname                     |  cmd   |      roles      |        qual         |     with_check
+----------------------------------------------------+--------+-----------------+---------------------+---------------------
+ Room images are manageable by admins and owners    | ALL    | {authenticated} | is_admin_or_owner() | is_admin_or_owner()
+ Room images are viewable by everyone               | SELECT | {public}        | true                |
+ Room schedules are manageable by admins and owners | ALL    | {authenticated} | is_admin_or_owner() | is_admin_or_owner()
+ Room schedules are viewable by everyone            | SELECT | {public}        | true                |
+ Rooms are manageable by admins and owners          | ALL    | {authenticated} | is_admin_or_owner() | is_admin_or_owner()
+ Rooms are viewable by everyone                     | SELECT | {public}        | true                |
+
+Antes: "Rooms are manageable by admins only" | ALL | ((auth.jwt() ->> 'role') = 'admin')
+Ya no queda ninguna política con auth.jwt() ->> 'role'.
+
+Claims de los tokens usados (decodificados):
+ attacker-after-fix@poc.local: role(top-level)=authenticated, user_metadata.role=admin  <-- inyectado, ignorado
+ admin@hotel.local:            role(top-level)=authenticated, app_metadata.role=admin
+
+PATCH /rest/v1/rooms?id=eq.82695af5-838f-4660-af75-36bb074fded1  {"name":"Deluxe Premium"}
+(mismo valor; Prefer: return=representation)
+
+ Actor                                 | Filas afectadas
+---------------------------------------+-----------------
+ anon                                  | 0
+ client (attacker-after-fix@poc.local) | 0    <-- ✅ aunque su JWT diga user_metadata.role=admin
+ admin  (admin@hotel.local)            | 1    <-- ✅ el admin legítimo ahora SÍ puede (antes la condición nunca se cumplía)
+
+========================================================================
+(b) SESIÓN EN EL SERVIDOR — getSession() vs getUser()
+========================================================================
+Token forjado: access_token real de attacker-after-fix@poc.local con el payload
+modificado (sub = id de admin@hotel.local, email = admin@hotel.local) y la firma original.
+
+Lo que veía getSession() (decodifica la cookie sin verificar):
+  {'sub': 'd5171080-e8c2-43ee-8945-0533622b33cc', 'email': 'admin@hotel.local'}   <-- se haría pasar por el admin
+
+Lo que hace ahora getVerifiedSession() -> auth.getUser() -> GET /auth/v1/user:
+  {"code":403,"error_code":"bad_jwt","msg":"invalid JWT: unable to parse or verify
+   signature, token signature is invalid: crypto/ecdsa: verification error"}      HTTP 403   <-- ✅ rechazado
+
+Control (token legítimo, sin modificar): HTTP 200, id 5447f7b7-…, attacker-after-fix@poc.local
+
+Test de regresión — packages/core/src/auth/server/getVerifiedSession.test.ts:
+ ✓ returns nulls when Supabase Auth rejects the token, even if a cookie session exists
+ ✓ returns nulls without logging when there is no session at all
+ ✓ uses the verified user instead of the user decoded from the cookie
+ Tests  3 passed (3)
+
+Lectores de sesión migrados a getVerifiedSession(): getServerAuthContext, refreshSession
+(packages/core), getAuthContextAction, getInitialAuthStatus y requirePermission (panel-admin).
+
+========================================================================
+RESULTADO: la RLS ya no confía en el claim `role` del JWT sino en
+public.user_roles (vía is_admin_or_owner()), y el servidor valida la firma
+del token antes de usarlo. La PoC original ya no funciona.
+Riesgo residual propuesto: Bajo para (a). Para (b), Medio mientras queden
+lectores con getSession() fuera del módulo (audit-log/getAuditLogs.ts de
+Fabian y admins-table/permissions.ts de Joseph).
