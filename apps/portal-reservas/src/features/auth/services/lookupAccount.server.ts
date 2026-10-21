@@ -3,37 +3,21 @@
 /**
  * @file lookupAccount.server.ts — Public "do I already have an account?" lookup.
  *
- * ⚠️ SECURITY COURSE PROJECT — CONTROLLED VULNERABILITY (AUTH-POC-3) ⚠️
- * Introduced deliberately per the team decision in
- * `docs/proyecto-seguridad/plan-desarrollo.md` §4.1, because the real auth code
- * had no reachable injection sink: every auth query goes through the Supabase
- * client with parameterized `.eq()` calls (see `packages/core/src/permissions`
- * and `signInWithPassword`), so the A03 half of Vector 1 (P2.1) had no real
- * finding to demonstrate. The strong, *real* findings for this vector are A01:
- * signup role escalation (AUTH-POC-1, O-02) and JWT-claim trust in RLS +
- * `getSession()` (AUTH-POC-2, O-05/O-11).
+ * SECURITY COURSE PROJECT — AUTH-POC-3 (introduced in Fase 2, per plan §4.1),
+ * FIXED in P3.1.
  *
- * This mirrors the controlled vulns already in the repo for the sibling
- * modules so the Fase 3 fix has the same shape:
- *   - Operations: `lookupReservation.server.ts` (OP-POC-1), fixed in A3.1.
- *   - Audit (real): `getAuditLogs.ts:57`, fixed in F3.1.
+ * THE BUG (Fase 2): `name` and `accountId` were concatenated into a PostgREST
+ * `.or()` filter string, so an attacker controlled the filter *syntax*
+ * (e.g. `name = "a,is_active.eq.true"`) and could dump every profile through the
+ * service-role client (OWASP A03 + A01).
  *
- * THE BUG: `name` and `accountId` are concatenated directly into a PostgREST
- * `.or()` filter string instead of using parameterized `.eq()` / `.ilike()`
- * calls. Both values are attacker-controlled; filter *syntax* (commas,
- * operators) can be injected, not just filter *values* — the OWASP A03
- * injection class for PostgREST/Supabase query builders. Because any column is
- * reachable in a forged OR clause, this doubles as an A01 info-disclosure:
- * the form "find my own account" becomes "dump every profile", which leaks the
- * full_name / active state of every user and helps an attacker pick an admin
- * to target with AUTH-POC-1.
- *
- * `profiles` has RLS enabled; this public, pre-login feature runs under the
- * service-role client (same as `lookupReservation.server.ts`), so the forged
- * filter is evaluated against every row.
- *
- * DO NOT replicate this pattern. The Fase 3 fix (P3.1) must replace the `.or()`
- * string with parameterized `.eq()` / `.ilike()` filters.
+ * THE FIX (root cause, same shape as A3.1 in `lookupReservation.server.ts`):
+ *   1. No filter strings: the only filter is a parameterized `.eq()` on the id,
+ *      so user input is bound as a value and can never become syntax.
+ *   2. `accountId` must be a UUID; anything else is rejected before querying.
+ *   3. The name is compared in code (case-insensitive, exact) instead of with
+ *      `ilike`, so `%` / `_` / `*` wildcards cannot widen the match.
+ *   4. At most one row can come back: the account whose id AND name both match.
  */
 
 import { createSupabaseServiceClient, DB_COLUMNS, DB_TABLES } from "@hotel/db";
@@ -41,7 +25,7 @@ import { createSupabaseServiceClient, DB_COLUMNS, DB_TABLES } from "@hotel/db";
 export interface AccountLookupInput {
   /** Full name the visitor types in the "find my account" form. */
   name: string;
-  /** Optional account id hint from a recovery link. */
+  /** Account id hint from a recovery link. */
   accountId: string;
 }
 
@@ -57,25 +41,33 @@ type RawProfileRow = {
   is_active: boolean;
 };
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_NAME_LENGTH = 200;
+
+function normalizeName(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLocaleLowerCase();
+}
+
 export async function lookupAccount(input: AccountLookupInput): Promise<AccountLookupResult[]> {
+  const name = normalizeName(String(input.name ?? ""));
+  const accountId = String(input.accountId ?? "").trim();
+
+  if (!name || name.length > MAX_NAME_LENGTH || !UUID_PATTERN.test(accountId)) return [];
+
   const supabase = createSupabaseServiceClient();
   const c = DB_COLUMNS.profiles;
 
-  // VULNERABLE: unparameterized string concatenation into a PostgREST filter.
-  // Should be `.ilike(c.full_name, `%${input.name}%`).eq(c.id, input.accountId)`.
-  const filter = `${c.full_name}.ilike.%${input.name}%,${c.id}.eq.${input.accountId}`;
-
+  // FIXED (P3.1): parameterized equality filter; `accountId` is bound as a value.
   const { data, error } = await supabase
     .from(DB_TABLES.PROFILES)
     .select(`${c.id}, ${c.full_name}, ${c.is_active}`)
-    .or(filter)
-    .limit(50);
+    .eq(c.id, accountId)
+    .maybeSingle();
 
   if (error || !data) return [];
 
-  return (data as unknown as RawProfileRow[]).map((row) => ({
-    id: row.id,
-    fullName: row.full_name,
-    isActive: row.is_active,
-  }));
+  const row = data as unknown as RawProfileRow;
+  if (!row.full_name || normalizeName(row.full_name) !== name) return [];
+
+  return [{ id: row.id, fullName: row.full_name, isActive: row.is_active }];
 }
