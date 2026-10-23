@@ -12,6 +12,7 @@
  * On failure, returns an i18n error key for the form to display.
  */
 
+import { resolveSafeRedirectPath } from "@hotel/core/auth";
 import { createSupabaseServerClient } from "@hotel/db";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -61,5 +62,6 @@ export async function loginAction(
   }
 
   // Success: redirect to the callback URL (from "redirect after login" flow) or home.
-  redirect(callbackUrl || ROUTES.HOME);
+  // AUTH-POC-5 (P3.3): only same-origin paths; absolute or `//host` values fall back to home.
+  redirect(resolveSafeRedirectPath(callbackUrl, ROUTES.HOME));
 }

@@ -101,6 +101,7 @@ export { useAuthSession } from "./client/useAuthSession";
 
 // Re-export constants
 export { AUTH_ROLES } from "./config/constants";
+export { resolveSafeRedirectPath } from "./shared/safeRedirect";
 export {
   createAuthError,
   getRedirectUrl,
