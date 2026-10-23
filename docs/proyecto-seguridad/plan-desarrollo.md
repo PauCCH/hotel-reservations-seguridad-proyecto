@@ -69,7 +69,7 @@ _Última actualización: 2026-10-21_
 
 | Integrante | Módulo | Fase actual | Próxima tarea | Rama activa | Bloqueos |
 |---|---|---|---|---|---|
-| Paula | Autenticación | 3 — Remediación | P3.2 Parches del vector 2 (AUTH-POC-4) + CSP global (avisar al equipo) | `security/auth/fase3-parches` (PR #19, en revisión) | PR #19 espera revisión de Joseph (`requirePermission`, invitaciones) y Aarón (RLS de `rooms`) — G3.3. P3.2 irá en una rama nueva desde `develop` |
+| Paula | Autenticación | 3 — Remediación | P3.3 Parches del vector 3 (AUTH-POC-5 open redirect) + cookies `HttpOnly`/`Secure`/`SameSite` | `security/auth/fase3-xss-csp` (P3.2 commiteado, sin PR; P3.1 mergeado en `develop`, PR #19) | Avisar al equipo de la CSP nueva en los 3 `middleware.ts` antes del PR de P3.2 (§4.4) |
 | Joseph | Gestión de Usuarios | 2 — Evaluación ofensiva | J2.1 Vector 1 — servidor (A03 + A01) | — | — |
 | Aarón | Operaciones / Transacciones | 3 — Remediación | Revisión cruzada de PR #16 (G3.3) + A3.7 (video). A3.4 bloqueada | `security/operations/fase3-checkout-rooms-catalog` (PR #16) | A3.4 bloqueada por la util de saneo de Fabian (F3.3/F3.4) |
 | Fabian | Logs / Auditoría | 2 — cerrada, pendiente G2 | Esperar G2 (consolidación del doc de PoCs) hasta que Paula/Joseph/Aarón cierren P2.4/J2.4/A2.4; mientras, puede adelantar Fase 3 (F3.1) | `security/audit/fase2-pocs` | G2 depende de los otros 3 módulos |
@@ -216,7 +216,7 @@ mensajes de error que permiten enumerar usuarios, reflejo de parámetros en pág
 
 **Fase 3**
 - [x] P3.1 Parches del vector 1 (PR propio).
-- [ ] P3.2 Parches del vector 2 + CSP global (archivo compartido, avisar al equipo).
+- [x] P3.2 Parches del vector 2 + CSP global (archivo compartido, avisar al equipo).
 - [ ] P3.3 Parches del vector 3 + cookies `HttpOnly`/`Secure`/`SameSite`.
 - [ ] P3.4 Auditoría del módulo: eventos de auth saneados vía API de Fabian.
 - [ ] P3.5 Tests de regresión + riesgo residual por hallazgo.
@@ -245,6 +245,9 @@ mensajes de error que permiten enumerar usuarios, reflejo de parámetros en pág
 | 2026-10-21 | P3.1 (re-test en vivo) — Supabase local levantado; aplicadas 6 migraciones pendientes (4 de `develop` + las 2 de P3.1). AUTH-POC-1: mismo signup con `role:"admin"` queda `client`; invitación + `promote_invited_admin` sigue creando admin; `anon`/`authenticated` reciben `permission denied`. AUTH-POC-2: `client` actualiza 0 filas de `rooms`, admin 1; token forjado rechazado por `getUser()` (403 `bad_jwt`). AUTH-POC-3: payload corregido vuelca 7/7 perfiles con el código vulnerable y 0 con el parche; nuevo caso de test | `security/auth/fase3-parches`, commits `858546d` (test), `53396aa` (evidencias) | Hecho; `evidencias/P3.1-AUTH-POC-{1,2,3}-retest.txt`. Riesgo residual propuesto: Bajo para POC-1, POC-2(a) y POC-3; Medio para POC-2(b) mientras `getAuditLogs.ts` (Fabian) y `admins-table/permissions.ts` (Joseph) usen `getSession()`. Pendiente: bajar a mano `attacker-escalation@poc.local` (escalada en Fase 2) |
 | 2026-10-21 | Corrección de AUTH-POC-3 en `fase-2-pocs.md`: el payload documentado (`a,is_active.eq.true`, `accountId="none"`) fallaba en vivo con `22P02`; reemplazado por uno que sí vuelca la tabla y enlazada la evidencia en vivo | `security/auth/fase3-parches`, commit `53396aa` | Hecho; avisar a Fabian antes de G2 (documento de PoCs consolidado) |
 | 2026-10-21 | PR de P3.1 abierto contra `develop` (parches AUTH-POC-1/2/3 + re-test en vivo + corrección de AUTH-POC-3 en Fase 2); revisores pedidos: Joseph y Aarón (cambios en sus archivos, G3.3); nota a Fabian (`getSession()` en `getAuditLogs.ts`, payload corregido para G2) | `security/auth/fase3-parches`, PR #19 (commits `1ef0b61` … `4a3f0df`) | Abierto, pendiente de revisión y merge (hito H3) |
+| 2026-10-21 | Rama de P3.2 creada desde `develop` (`91b169c`; PR #19 aún sin merge, por eso este plan no trae las entradas de P3.1) | `security/auth/fase3-xss-csp` | Local (aún sin push). Al mergear #19 habrá conflicto en esta tabla y en §2: conservar ambas versiones |
+| 2026-10-21 | P3.2 — AUTH-POC-4: eliminado el sink (`authErrorHtml.ts` + `dangerouslySetInnerHTML`); `/auth/error` resuelve en servidor una clave de allowlist (`resolveAuthError.ts`) y ya no refleja `error`/`error_description` (cierra también O-04). CSP global con nonce por request (`@hotel/core/security`) + `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, HSTS (prod) en los middlewares de portal, panel (matcher ampliado a todas las rutas; control de sesión sigue solo en `/admin`) y landing; layout del portal dinámico para el nonce | `security/auth/fase3-xss-csp`, commits `caa2f95` (AUTH-POC-4), `ee693e6` (CSP) | Hecho; tests en verde (core 76, portal 58, panel 19). Re-test en vivo: PoC neutralizada y, con el sink de la Fase 2 restaurado a propósito, la CSP bloquea el `onerror` (violación en consola). Build de producción: 17/17 scripts con nonce, 0 violaciones, login OK. Evidencias: `P3.2-AUTH-POC-4-retest.txt`, `P3.2-AUTH-POC-4-fixed.jpg`, `P3.2-AUTH-POC-4-csp-blocks-sink.jpg`. Riesgo residual propuesto: Bajo |
+| 2026-10-21 | PR #19 (P3.1) mergeado en `develop` (merge `d3ab864`); `develop` traído a la rama de P3.2. Conflicto en el plan (§2 y §5.1) resuelto conservando ambas versiones | `security/auth/fase3-xss-csp`, merge de `origin/develop` | Hecho; tests en verde tras el merge (core 79, portal 62, panel 19), sin errores nuevos de type-check. P3.2 pendiente de PR |
 
 ---
 

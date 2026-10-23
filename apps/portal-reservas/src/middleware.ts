@@ -9,18 +9,31 @@
  * - getAll(): reads cookies from the incoming request
  * - set(): writes cookies to the outgoing response (for token refresh)
  *
+ * It also sets a per-request nonce Content Security Policy and the security
+ * headers from `@hotel/core/security` (P3.2, AUTH-POC-4).
+ *
  * Matcher excludes static assets (_next/static, _next/image, favicon, images).
  */
 
+import { applySecurityHeaders, prepareSecurityHeaders } from "@hotel/core/security";
 import { createSupabaseServerClient } from "@hotel/db";
 import { type NextRequest, NextResponse } from "next/server";
 
+const IS_DEV = process.env.NODE_ENV === "development";
+
 export async function middleware(request: NextRequest) {
+  const { requestHeaders, csp } = prepareSecurityHeaders(request.headers, {
+    isDev: IS_DEV,
+    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    imgSrc: ["https://images.unsplash.com"],
+  });
+
   const response = NextResponse.next({
     request: {
-      headers: request.headers,
+      headers: requestHeaders,
     },
   });
+  applySecurityHeaders(response.headers, csp, IS_DEV);
 
   // Create a Supabase server client with cookie read/write support.
   const supabase = createSupabaseServerClient({

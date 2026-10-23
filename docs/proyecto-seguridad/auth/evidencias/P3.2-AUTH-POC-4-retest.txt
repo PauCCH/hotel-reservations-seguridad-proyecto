@@ -1,0 +1,95 @@
+AUTH-POC-4 — Re-test tras el parche P3.2 (XSS reflejado en /auth/error) + CSP global
+Entorno: portal-reservas (:3001 dev, :3101 build de producción), panel-admin (:3002), landing (:3000);
+Supabase local. Fecha: 2026-10-21.
+Rama: security/auth/fase3-xss-csp, commits caa2f95 (AUTH-POC-4) y ee693e6 (CSP)
+Antes (Fase 2): evidencias/AUTH-POC-4-xss-reflected.jpg + AUTH-POC-4-vitest.txt
+
+URL de la PoC (sin cambios respecto a la Fase 2):
+  http://localhost:3001/auth/error?error_description=%3Cimg%20src%3Dx%20onerror%3Dalert(document.cookie)%3E
+
+========================================================================
+1) CAPA 1 — CAUSA RAÍZ: el sink ya no existe (P3.2-AUTH-POC-4-fixed.jpg)
+========================================================================
+- Eliminados authErrorHtml.ts (buildErrorDescriptionHtml → { __html }) y el
+  dangerouslySetInnerHTML de AuthErrorContent.tsx.
+- page.tsx resuelve en el servidor una clave de una allowlist (resolveAuthError.ts);
+  al componente cliente solo llega `errorKey`. error_description se ignora y un
+  `error` desconocido se muestra como unknown_error (cierra también O-04: ya no se
+  puede inyectar texto arbitrario de phishing en la página).
+
+Resultado en el navegador con la URL de la PoC:
+  <img src="x"> inyectados:   0
+  Texto de la tarjeta:        "Error de autenticación / Ocurrió un error inesperado.
+                               Intentá de nuevo. / Código de error: unknown_error"
+  El payload solo aparece en el estado interno del router de Next.js (la URL, como
+  dato JSON escapado <…), nunca como marcado ni como prop del componente.
+
+Con ?error=email_not_confirmed&error_description=<payload>:
+  "Verificá tu correo antes de iniciar sesión. / Código de error: email_not_confirmed"
+
+========================================================================
+2) CAPA 2 — DEFENSA EN PROFUNDIDAD: la CSP bloquea el sink aunque reaparezca
+   (P3.2-AUTH-POC-4-csp-blocks-sink.jpg)
+========================================================================
+Prueba: se restauró TEMPORALMENTE el AuthErrorContent vulnerable de la Fase 2
+(git checkout HEAD -- …) dejando activa la CSP nueva, y se abrió la URL de la PoC.
+
+  <img src="x"> inyectado:     1   (el sink sigue inyectando el marcado)
+  atributo onerror:            "alert(document.cookie)"
+  alert ejecutado:             NO
+  Consola del navegador:
+    [error] Executing inline event handler violates the following Content Security
+    Policy directive 'script-src 'self' 'nonce-VzGtbmptqbodKzYpqgDvtQ==' 'strict-dynamic'
+    'unsafe-eval''. … The action has been blocked.
+
+Luego se restauró el parche (sin dangerouslySetInnerHTML).
+
+========================================================================
+3) CSP Y CABECERAS ENVIADAS
+========================================================================
+Producción (next build + next start, :3101):
+ Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-<aleatorio por request>'
+   'strict-dynamic'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:
+   http://127.0.0.1:54321 https://images.unsplash.com; font-src 'self' data:;
+   connect-src 'self' http://127.0.0.1:54321 ws://127.0.0.1:54321; object-src 'none';
+   base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+ Strict-Transport-Security: max-age=63072000; includeSubDomains
+ X-Content-Type-Options: nosniff · X-Frame-Options: DENY ·
+ Referrer-Policy: strict-origin-when-cross-origin ·
+ Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+ Scripts con nonce: 17/17 · Violaciones de CSP: 0 · Login con cuenta de prueba: OK
+
+Desarrollo: igual, más 'unsafe-eval' (lo exige React en dev) y sin HSTS /
+upgrade-insecure-requests (localhost en http).
+
+Build: todas las rutas del portal quedan ƒ (Dynamic), requisito para el nonce
+(layout.tsx llama a headers()). Para compilar se desactivó temporalmente la
+validación de tipos en next.config.ts por los errores preexistentes de @hotel/db
+en develop; se restauró después.
+
+========================================================================
+4) NO REGRESIÓN EN LAS 3 APPS (dev)
+========================================================================
+ portal-reservas  /, /auth/login, login real: OK, 0 violaciones
+ panel-admin      /auth/login ahora recibe la CSP (antes el middleware solo cubría
+                  /admin/*); /admin/dashboard: OK (cuenta client → 403 esperado), 0 violaciones
+ landing          /: OK, imágenes vía /_next/image, 0 violaciones
+
+========================================================================
+5) TESTS DE REGRESIÓN
+========================================================================
+ apps/portal-reservas/src/app/auth/error/resolveAuthError.test.ts   4 ✓
+   (reemplaza authErrorHtml.test.ts, que afirmaba el sink vulnerable)
+ packages/core/src/security/index.test.ts                           8 ✓
+   - script-src sin 'unsafe-inline' (bloquea onerror=), nonce + strict-dynamic
+   - object-src/base-uri/form-action/frame-ancestors bloqueados
+   - mismo nonce/CSP en request y response; HSTS solo en producción
+ Totales: @hotel/core 76 ✓ · @hotel/portal-reservas 58 ✓ · @hotel/panel-admin 19 ✓
+
+========================================================================
+RESULTADO: la PoC original ya no funciona (causa raíz eliminada) y, como
+segunda capa, la CSP con nonce impide ejecutar handlers inline aunque un
+sink HTML reaparezca. Riesgo residual propuesto: Bajo para AUTH-POC-4.
+Pendiente relacionado (P3.3): cookies de sesión HttpOnly (O-10).
+Nota: style-src mantiene 'unsafe-inline' (estilos inline de Tailwind/HeroUI);
+no permite ejecutar script.

@@ -1,3 +1,5 @@
+import type { AuthErrorKey } from "./resolveAuthError";
+
 export type AuthErrorSearchParams = { [key: string]: string | string[] | undefined };
 
 export interface AuthErrorPageProps {
@@ -5,5 +7,6 @@ export interface AuthErrorPageProps {
 }
 
 export interface AuthErrorContentProps {
-  searchParams: AuthErrorSearchParams;
+  /** Allowlisted key resolved on the server; raw query values never reach the client. */
+  errorKey: AuthErrorKey;
 }
