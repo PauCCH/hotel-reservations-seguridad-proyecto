@@ -1,0 +1,84 @@
+AUTH-POC-6 — Re-test tras P3.4 (log injection / audit poisoning en eventos de login)
+Entorno: Supabase local + panel-admin (:3002) y portal-reservas (:3001) en dev. Fecha: 2026-10-22.
+Rama: security/auth/fase3-redirect-cookies-audit, commit ee4a491 (AUTH-POC-6)
+Antes (Fase 2): evidencias/AUTH-POC-6-log-injection.txt + AUTH-POC-6-log-injection.jpg
+
+========================================================================
+CÓMO SE ENVIÓ (mejor que en la Fase 2)
+========================================================================
+En la Fase 2 el payload pasó por el navegador (el <input type="email"> quita CR/LF) y el
+spoofing de IP quedó "solo a nivel de código". Ahora se envió con un cliente HTTP crudo:
+el formulario de login (Server Action) incluye los campos ocultos $ACTION_*; se reenviaron
+por POST multipart con:
+  - CR/LF reales en el email
+  - X-Forwarded-For: 10.0.0.1 y X-Real-IP: 10.0.0.1
+  - Origin válido (Next valida Origin en Server Actions)
+
+  (A) email = "owner@hotel.local"                       password incorrecto
+  (B) email = "victima@hotel.com\r\n2026-10-22 09:00:00  auth.login.success
+               actor=owner@hotel.local  ip=10.0.0.1  [FORJADO POR EL ATACANTE]"
+
+========================================================================
+1) PANEL — filas resultantes en public.audit_logs
+========================================================================
+  Fase 2 (antes):
+    (A) actor_email = owner@hotel.local
+        metadata    = {"email":"owner@hotel.local","reason":"Invalid login credentials"}
+    (B) actor_email = victima@hotel.com2026-10-21 09:00:00  auth.login.success  actor=owner…[FORJADO…]
+        metadata    = {"email":"<mismo texto>","reason":"Invalid login credentials"}
+
+  P3.4 (después):
+    -[ (A) ]---------------------------------------------------------------
+    action      | auth.login.failed
+    actor_id    |
+    actor_email |                         <-- ✅ sin actor: no se atribuye al owner
+    ip_address  |                         <-- ✅ X-Forwarded-For ignorado (F3.3 de Fabian)
+    metadata    | {"reason": "invalid_credentials", "attempted_email": "owner@hotel.local",
+                |  "attempted_email_valid": true}
+    -[ (B) ]---------------------------------------------------------------
+    action      | auth.login.failed
+    actor_id    |
+    actor_email |                         <-- ✅
+    ip_address  |                         <-- ✅
+    metadata    | {"reason": "invalid_credentials", "attempted_email": null,
+                |  "attempted_email_valid": false}     <-- ✅ la línea forjada no se guarda
+
+  - `reason` es un código cerrado (antes: el mensaje crudo del proveedor).
+  - El email tecleado solo queda en metadata.attempted_email y solo si es una dirección
+    válida (sin espacios, CR/LF, comillas ni ángulos).
+
+========================================================================
+2) PORTAL — antes no auditaba los logins; ahora sí, con las mismas reglas
+========================================================================
+  Mismo envío (A) y (B) contra http://localhost:3001/auth/login → mismas 2 filas que en el
+  panel (sin actor, attempted_email válido / null, reason=invalid_credentials).
+  Login exitoso del re-test de AUTH-POC-5:
+    action = auth.login.success · actor_email = attacker-after-fix@poc.local (verificado por
+    Supabase) · metadata = {"app": "portal-reservas"}
+
+========================================================================
+3) CADENA DE AUDITORÍA Y LOGS DEL SERVIDOR
+========================================================================
+  select public.verify_audit_chain();  →  NULL   (cadena íntegra con las filas nuevas)
+  Logs del servidor (panel y portal): sin "access_token" ni el payload "FORJADO".
+  - Se eliminaron de packages/core/src/auth/server/loginAction.ts los console.log que
+    imprimían el email tecleado y el access_token de cada sesión.
+
+========================================================================
+4) TESTS DE REGRESIÓN
+========================================================================
+  packages/core/src/auth/shared/loginAudit.test.ts        7 ✓
+  packages/core/src/auth/server/loginAction.test.ts       +3 casos:
+    - un login fallido no se atribuye al email tecleado (payload B)
+    - un email válido queda solo como metadata.attempted_email
+    - el actor es el usuario autenticado y el access_token no se imprime en consola
+  Totales: @hotel/core 95 ✓ · @hotel/portal-reservas 62 ✓ · @hotel/panel-admin 19 ✓
+
+========================================================================
+RESULTADO: la PoC original ya no funciona: no hay atribución forjada, el contenido
+libre/CR-LF no llega al rastro y la IP falsificada se descarta. Riesgo residual
+propuesto: Bajo.
+Nota para Fabian: los eventos auth.login.failed sin usuario autenticado ahora tienen
+actor_email = null; el email intentado está en metadata.attempted_email.
+Limitación: ip_address queda null en dev porque no hay proxy de confianza configurado
+(AUDIT_TRUSTED_PROXY_HOPS); en producción detrás de un proxy se registra la IP real.
