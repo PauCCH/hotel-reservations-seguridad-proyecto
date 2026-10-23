@@ -123,7 +123,7 @@ Usuarios (Joseph), que consume el mismo `user_roles`.
 | OWASP | A01:2021 Broken Access Control + A07:2021 Identification & Authentication Failures |
 | NIST CSF 2.0 | PR.AA-05, PR.AA-02 (identidades verificadas), DE.CM-01 |
 | Origen del hallazgo | **Real** (confirma O-05 y O-11 de la Fase 1) |
-| Riesgo asociado | AUTH-R02 / AUTH-R03 |
+| Riesgo asociado | AUTH-R07 / AUTH-R10 — *corregido el 2026-10-22 (Fase 3, P3.6): decía "AUTH-R02 / AUTH-R03", que en la Fase 1 son el open redirect y la fuerza bruta. Según §4.5 de `fase-1-diagnostico.md`, O-05 corresponde a AUTH-R07 y O-11 a AUTH-R10.* |
 | Componente / archivo:línea | `packages/db/supabase/migrations/20260609000001_rooms_rls_policies.sql:14-15`; `packages/core/src/auth/server/getServerAuthContext.ts:71` (y `refreshSession.ts`, `getAuthContextAction.ts`) |
 
 ### Descripción
