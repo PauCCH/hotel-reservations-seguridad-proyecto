@@ -1,9 +1,16 @@
-import { createSupabaseClient } from "@hotel/db/client";
+import type { SupabaseServerClient } from "@hotel/db";
 import type { RoomSchedule } from "@/features/rooms/domain/schedule.interface";
 
+// Called only from Server Actions (scheduleActions.ts) with the cookie-bound server
+// client: session cookies are HttpOnly since P3.3, so the browser client is anonymous
+// and RLS would reject the writes.
+
 export const scheduleService = {
-  getRoomSchedules: async (roomId: string): Promise<RoomSchedule[]> => {
-    const supabase = createSupabaseClient() as any;
+  getRoomSchedules: async (
+    roomId: string,
+    client: SupabaseServerClient,
+  ): Promise<RoomSchedule[]> => {
+    const supabase = client as any;
     const { data, error } = await supabase.from("room_schedules").select("*").eq("room_id", roomId);
 
     if (error) throw new Error(error.message);
@@ -13,8 +20,9 @@ export const scheduleService = {
   saveRoomSchedules: async (
     roomId: string,
     schedules: { checkIn: string[]; checkOut: string[] },
+    client: SupabaseServerClient,
   ): Promise<void> => {
-    const supabase = createSupabaseClient() as any;
+    const supabase = client as any;
 
     // 1. Delete existing schedules for this room to avoid duplicates
     const { error: deleteError } = await supabase

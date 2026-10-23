@@ -1,0 +1,73 @@
+AUTH-POC-5 (open redirect) + cookies de sesión — Re-test tras P3.3
+Entorno: Supabase local + portal-reservas (:3001) y panel-admin (:3002) en dev. Fecha: 2026-10-22.
+Rama: security/auth/fase3-redirect-cookies-audit, commits 164676f (AUTH-POC-5) y ea95951 (cookies + Server Actions)
+Antes (Fase 2): evidencias/AUTH-POC-5-open-redirect.txt, AUTH-POC-5-open-redirect2.png, AUTH-POC-5-open-redirect2.1.png
+Tokens/códigos redactados; entorno local de prueba (cuenta attacker-after-fix@poc.local creada en P3.1).
+
+========================================================================
+1) LOGIN DEL PORTAL — mismo enlace de la Fase 2
+   (P3.3-AUTH-POC-5-step1-malicious-link.jpg / P3.3-AUTH-POC-5-step2-stays-on-site.jpg)
+========================================================================
+  URL: http://localhost:3001/auth/login?callbackUrl=https://example.com/
+  Campo oculto del formulario: callbackUrl = "https://example.com/"  (el atacante lo sigue enviando)
+
+  Fase 2:  POST /auth/login?callbackUrl=https://example.com/ → 303 → GET https://example.com/
+  P3.3:    POST /auth/login?callbackUrl=https://example.com/ → 303 → http://localhost:3001/   ✅
+           Sesión iniciada (header muestra "Cerrar Sesión").
+
+========================================================================
+2) CALLBACK OAuth/magic-link — flujo PKCE real (code válido)
+========================================================================
+  Magic link con PKCE (POST /auth/v1/otp con code_challenge S256) → correo en Mailpit →
+  GET /auth/v1/verify → code → GET /auth/callback?code=<code>&callbackUrl=<X>
+  con la cookie sb-127-auth-token-code-verifier del flujo.
+
+  callbackUrl                         | Location
+  ------------------------------------+------------------------------------------------
+  https://evil.example/phish          | http://localhost:3001/                       ✅
+  //evil.example/phish                | http://localhost:3001/                       ✅
+  /reservations/lookup?ref=demo       | http://localhost:3001/reservations/lookup?ref=demo  (control: ruta interna se respeta)
+
+========================================================================
+3) COOKIES DE SESIÓN — Set-Cookie del callback (O-10)
+========================================================================
+  set-cookie: sb-127-auth-token=<REDACTED>; Path=/; Expires=…; Max-Age=34560000; HttpOnly; SameSite=lax
+  set-cookie: sb-127-auth-token-code-verifier=; Path=/; Max-Age=0; HttpOnly; SameSite=lax
+
+  - HttpOnly + SameSite=Lax presentes. Secure se agrega solo en producción
+    (SESSION_COOKIE_OPTIONS.secure = NODE_ENV === "production"); en dev es http://localhost.
+  - Con sesión iniciada en portal y panel: document.cookie === ""  → el token NO es
+    legible desde JavaScript (un XSS ya no puede robarlo).
+
+========================================================================
+4) NO REGRESIÓN — flujos que dependían de la sesión en el navegador
+========================================================================
+  Portal (sessionActions.ts):
+    - Header pasa a "Cerrar Sesión" tras login; "Cerrar Sesión" cierra la sesión y se
+      mantiene cerrada al recargar.
+  Panel, admin@hotel.local (cuenta del seed):
+    - Login → /admin/dashboard OK.
+    - saveRoomSchedulesAction (horarios) vía Server Action con la cookie HttpOnly:
+      {"error":null}; getRoomSchedulesAction devuelve los 2 horarios guardados
+      (datos de prueba borrados después).
+    - getRoomAmenitiesFormDataAction ("Deluxe Premium"): error null, 10 amenidades del
+      catálogo, 7 seleccionadas (coincide con la BD).
+    - Contraste — la escritura como la hacía antes el navegador (cliente anónimo, no ve
+      la cookie HttpOnly):
+        POST /rest/v1/room_schedules → 401 {"code":"42501","message":"new row violates
+        row-level security policy for table \"room_schedules\""}
+      → por eso scheduleService/amenityService se movieron a Server Actions.
+  Nota: las vistas /admin/rooms/check-in-check-out y /admin/rooms/amenities usan
+  DEFAULT_ROOM_ID = "new-room-id" (placeholder preexistente, no UUID) y muestran error de
+  carga igual que antes del cambio; por eso las actions se probaron con roomId reales.
+
+========================================================================
+5) TESTS DE REGRESIÓN
+========================================================================
+  packages/core/src/auth/shared/safeRedirect.test.ts   6 ✓
+    (absolutas, //host, /\host, \t y \n, /..//host, /.//host, %2F%2F inerte, tamaño)
+
+========================================================================
+RESULTADO: la PoC original ya no funciona en ninguno de los dos flujos (login y
+callback). Las cookies de sesión son HttpOnly + SameSite=Lax (+ Secure en prod).
+Riesgo residual propuesto: Bajo para AUTH-POC-5 y para O-10.

@@ -2,7 +2,13 @@
 
 import { AUDIT_ACTIONS } from "@hotel/core/audit";
 import { getAuditRequestContext, logAuditEvent } from "@hotel/core/audit/server";
-import { hasRole, verifyAdminRole } from "@hotel/core/auth";
+import {
+  buildFailedLoginMetadata,
+  hasRole,
+  LOGIN_FAILURE_REASONS,
+  loginFailureReasonFromAuthError,
+  verifyAdminRole,
+} from "@hotel/core/auth";
 import { createSupabaseServerClient, DB_COLUMNS, DB_ENUMS, DB_TABLES } from "@hotel/db";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -23,10 +29,12 @@ export async function loginAction(
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error || !data.user) {
+    // AUTH-POC-6 (P3.4): no actor for a failed attempt; the typed email only goes
+    // to metadata (if well formed) and the reason is a closed code.
     await logAuditEvent({
-      actorEmail: email,
+      actorEmail: null,
       action: AUDIT_ACTIONS.AUTH_LOGIN_FAILED,
-      metadata: { email, reason: error?.message ?? "Invalid credentials" },
+      metadata: buildFailedLoginMetadata(email, loginFailureReasonFromAuthError(error)),
       ipAddress,
       userAgent,
     });
@@ -48,9 +56,9 @@ export async function loginAction(
     if (hasRole(roleData, [DB_ENUMS.user_role.admin, DB_ENUMS.user_role.owner])) {
       await logAuditEvent({
         actorId: data.user.id,
-        actorEmail: data.user.email ?? email,
+        actorEmail: data.user.email ?? null,
         action: AUDIT_ACTIONS.AUTH_LOGIN_FAILED,
-        metadata: { email, reason: "account_deactivated" },
+        metadata: { reason: LOGIN_FAILURE_REASONS.ACCOUNT_DEACTIVATED },
         ipAddress,
         userAgent,
       });
@@ -60,9 +68,9 @@ export async function loginAction(
 
     await logAuditEvent({
       actorId: data.user.id,
-      actorEmail: data.user.email ?? email,
+      actorEmail: data.user.email ?? null,
       action: AUDIT_ACTIONS.AUTH_LOGIN_FAILED,
-      metadata: { email, reason: "access_denied" },
+      metadata: { reason: LOGIN_FAILURE_REASONS.ACCESS_DENIED },
       ipAddress,
       userAgent,
     });
@@ -72,7 +80,7 @@ export async function loginAction(
 
   await logAuditEvent({
     actorId: data.user.id,
-    actorEmail: data.user.email ?? email,
+    actorEmail: data.user.email ?? null,
     action: AUDIT_ACTIONS.AUTH_LOGIN_SUCCESS,
     metadata: { requireAdmin: true },
     ipAddress,

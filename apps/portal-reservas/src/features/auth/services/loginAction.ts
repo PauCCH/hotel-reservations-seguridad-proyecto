@@ -10,8 +10,16 @@
  *
  * On success, redirects to the callback URL or home.
  * On failure, returns an i18n error key for the form to display.
+ * Every attempt is recorded in the audit trail (P3.4, AUTH-POC-6 rules).
  */
 
+import { AUDIT_ACTIONS } from "@hotel/core/audit";
+import { getAuditRequestContext, logAuditEvent } from "@hotel/core/audit/server";
+import {
+  buildFailedLoginMetadata,
+  loginFailureReasonFromAuthError,
+  resolveSafeRedirectPath,
+} from "@hotel/core/auth";
 import { createSupabaseServerClient } from "@hotel/db";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -34,7 +42,20 @@ export async function loginAction(
   const cookieStore = await cookies();
   const supabase = createSupabaseServerClient(cookieStore);
 
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { ipAddress, userAgent } = await getAuditRequestContext();
+
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+  if (error || !data.user) {
+    // No actor for a failed attempt; typed email only in metadata (if well formed).
+    await logAuditEvent({
+      actorEmail: null,
+      action: AUDIT_ACTIONS.AUTH_LOGIN_FAILED,
+      metadata: buildFailedLoginMetadata(email, loginFailureReasonFromAuthError(error)),
+      ipAddress,
+      userAgent,
+    });
+  }
 
   if (error) {
     // Special handling: email not confirmed — try to resend verification email.
@@ -60,6 +81,20 @@ export async function loginAction(
     return { error: ERROR_KEYS[AUTH_ERRORS.INVALID_CREDENTIALS] };
   }
 
+  if (!data.user) {
+    return { error: ERROR_KEYS[AUTH_ERRORS.UNKNOWN_ERROR] };
+  }
+
+  await logAuditEvent({
+    actorId: data.user.id,
+    actorEmail: data.user.email ?? null,
+    action: AUDIT_ACTIONS.AUTH_LOGIN_SUCCESS,
+    metadata: { app: "portal-reservas" },
+    ipAddress,
+    userAgent,
+  });
+
   // Success: redirect to the callback URL (from "redirect after login" flow) or home.
-  redirect(callbackUrl || ROUTES.HOME);
+  // AUTH-POC-5 (P3.3): only same-origin paths; absolute or `//host` values fall back to home.
+  redirect(resolveSafeRedirectPath(callbackUrl, ROUTES.HOME));
 }

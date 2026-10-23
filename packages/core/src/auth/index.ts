@@ -77,10 +77,10 @@ export type {
 // ============================================================================
 
 export { getInitialAuthStatus, getServerAuthContext } from "./server/getServerAuthContext";
-export { loginAction, loginFormAction } from "./server/loginAction";
-export { getAuthContextAction, refreshSession } from "./server/refreshSession";
 export type { VerifiedSession } from "./server/getVerifiedSession";
 export { getVerifiedSession } from "./server/getVerifiedSession";
+export { loginAction, loginFormAction } from "./server/loginAction";
+export { getAuthContextAction, refreshSession } from "./server/refreshSession";
 export { redirectToLogin, signOutAction } from "./server/signOutAction";
 
 // ============================================================================
@@ -101,6 +101,14 @@ export { useAuthSession } from "./client/useAuthSession";
 
 // Re-export constants
 export { AUTH_ROLES } from "./config/constants";
+export type { LoginFailureReason } from "./shared/loginAudit";
+export {
+  buildFailedLoginMetadata,
+  LOGIN_FAILURE_REASONS,
+  loginFailureReasonFromAuthError,
+  normalizeLoginEmail,
+} from "./shared/loginAudit";
+export { resolveSafeRedirectPath } from "./shared/safeRedirect";
 export {
   createAuthError,
   getRedirectUrl,

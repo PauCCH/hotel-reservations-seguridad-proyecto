@@ -2,11 +2,26 @@ import { createBrowserClient, createServerClient } from "@supabase/ssr";
 import { DB_ENV } from "./config/env";
 import type { Database } from "./database.types";
 
+/**
+ * Session cookie flags (P3.3, finding O-10). `HttpOnly` keeps the access/refresh
+ * tokens out of reach of page JavaScript (and of any XSS); `Secure` in production
+ * (local dev runs on http://localhost); `SameSite=Lax` limits cross-site sends.
+ * Because of `HttpOnly`, the browser client cannot see the session: authenticated
+ * reads/writes must go through Server Actions / route handlers.
+ */
+export const SESSION_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax",
+  path: "/",
+} as const;
+
 export function createSupabaseServerClient(cookieStore: {
   getAll: () => { name: string; value: string }[];
   set: (name: string, value: string, options?: object) => void;
 }) {
   return createServerClient<Database>(DB_ENV.SUPABASE_URL, DB_ENV.SUPABASE_ANON_KEY, {
+    cookieOptions: SESSION_COOKIE_OPTIONS,
     cookies: {
       getAll: () => cookieStore.getAll(),
       setAll: (cookies) =>
@@ -21,7 +36,8 @@ export function createSupabaseServerClient(cookieStore: {
   });
 }
 
-// For client-side usage in browser context only.
+// For client-side usage in browser context only. It does NOT see the session (HttpOnly
+// cookies): use it only for public reads and the OAuth redirect (PKCE verifier).
 export function createSupabaseClient() {
   return createBrowserClient<Database>(DB_ENV.SUPABASE_URL, DB_ENV.SUPABASE_ANON_KEY);
 }

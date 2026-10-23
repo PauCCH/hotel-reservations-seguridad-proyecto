@@ -26,6 +26,11 @@ import { redirect } from "next/navigation";
 import { AUDIT_ACTIONS } from "../../audit";
 import { getAuditRequestContext, logAuditEvent } from "../../audit/server";
 import { verifyAdminRole } from "../index";
+import {
+  buildFailedLoginMetadata,
+  LOGIN_FAILURE_REASONS,
+  loginFailureReasonFromAuthError,
+} from "../shared/loginAudit";
 import type { AdminProfile, ClientProfile, LoginResult } from "../shared/types";
 
 /**
@@ -80,7 +85,6 @@ export async function loginAction(
 ): Promise<LoginResult> {
   const { requireAdmin = false, redirectTo, cookieStore = await cookies() } = options;
 
-  console.log(`Attempting login for email: ${email}, requireAdmin: ${requireAdmin}`);
   const supabase = createSupabaseServerClient(cookieStore);
   const { ipAddress, userAgent } = await getAuditRequestContext();
 
@@ -91,10 +95,12 @@ export async function loginAction(
   });
 
   if (error || !data.user) {
+    // AUTH-POC-6 (P3.4): no actor for a failed attempt; the typed email only goes
+    // to metadata (if well formed) and the reason is a closed code.
     await logAuditEvent({
-      actorEmail: email,
+      actorEmail: null,
       action: AUDIT_ACTIONS.AUTH_LOGIN_FAILED,
-      metadata: { email, reason: error?.message ?? "Invalid credentials" },
+      metadata: buildFailedLoginMetadata(email, loginFailureReasonFromAuthError(error)),
       ipAddress,
       userAgent,
     });
@@ -114,17 +120,14 @@ export async function loginAction(
   const session = data.session as Session;
   const user = data.user;
 
-  console.log(`User ${user.id} logged in successfully`);
   await logAuditEvent({
     actorId: user.id,
-    actorEmail: user.email ?? email,
+    actorEmail: user.email ?? null,
     action: AUDIT_ACTIONS.AUTH_LOGIN_SUCCESS,
     metadata: { requireAdmin },
     ipAddress,
     userAgent,
   });
-  console.log(`Session created for user ${user.id}: ${session?.access_token}`);
-  console.log(`User ${user.id} is now logged in`);
 
   // Verify admin role if required
   if (requireAdmin) {
@@ -133,6 +136,15 @@ export async function loginAction(
     if (!admin) {
       // Sign out if not admin
       await supabase.auth.signOut();
+
+      await logAuditEvent({
+        actorId: user.id,
+        actorEmail: user.email ?? null,
+        action: AUDIT_ACTIONS.AUTH_LOGIN_FAILED,
+        metadata: { reason: LOGIN_FAILURE_REASONS.ACCESS_DENIED },
+        ipAddress,
+        userAgent,
+      });
 
       return {
         session: null,

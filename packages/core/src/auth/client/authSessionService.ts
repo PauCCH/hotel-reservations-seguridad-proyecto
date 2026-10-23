@@ -6,6 +6,10 @@
  * Manages session subscription and auto-refresh
  * to keep client in sync with server.
  *
+ * @deprecated Since P3.3 the session cookies are HttpOnly, so the browser client
+ * never sees a session and these helpers always report "signed out". Read auth
+ * state through Server Actions (`refreshSession` / `getAuthContextAction`) instead.
+ *
  * @example
  * ```ts
  * import { getClientSession, subscribeToAuthChanges } from "@hotel/core/auth";

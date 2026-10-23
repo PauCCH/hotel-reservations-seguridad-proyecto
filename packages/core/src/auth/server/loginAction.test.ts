@@ -85,6 +85,55 @@ describe("loginAction audit logging", () => {
     );
   });
 
+  it("does not attribute a failed login to the typed email (AUTH-POC-6)", async () => {
+    mockSignInWithPassword.mockResolvedValue({
+      data: {},
+      error: { code: "invalid_credentials", message: "provider text\nforged line" },
+    });
+
+    await loginAction("victima@hotel.com\n[SYSTEM] LOGIN_SUCCESS actor=owner@hotel.com", "x");
+
+    const event = mockLogAuditEvent.mock.calls[0][0];
+    expect(event.actorEmail).toBeNull();
+    expect(event.actorId).toBeUndefined();
+    expect(event.metadata).toEqual({
+      reason: "invalid_credentials",
+      attempted_email: null,
+      attempted_email_valid: false,
+    });
+    expect(JSON.stringify(event)).not.toContain("SYSTEM");
+    expect(JSON.stringify(event)).not.toContain("provider text");
+  });
+
+  it("keeps a well-formed typed email only as metadata, not as the actor", async () => {
+    mockSignInWithPassword.mockResolvedValue({ data: {}, error: { code: "invalid_credentials" } });
+
+    await loginAction("Owner@Hotel.Local", "wrong-password");
+
+    const event = mockLogAuditEvent.mock.calls[0][0];
+    expect(event.actorEmail).toBeNull();
+    expect(event.metadata).toMatchObject({ attempted_email: "owner@hotel.local" });
+  });
+
+  it("uses the authenticated user's email as actor and never logs the session token", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockSignInWithPassword.mockResolvedValue({
+      data: {
+        user: { id: "user-1", email: "user@example.com" },
+        session: { access_token: "secret-access-token" },
+      },
+      error: null,
+    });
+
+    await loginAction("USER@example.com", "correct-password");
+
+    expect(mockLogAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ actorId: "user-1", actorEmail: "user@example.com" }),
+    );
+    expect(JSON.stringify(logSpy.mock.calls)).not.toContain("secret-access-token");
+    logSpy.mockRestore();
+  });
+
   it("still logs the audit event when ip and user-agent are unavailable", async () => {
     mockGetAuditRequestContext.mockResolvedValue({ ipAddress: null, userAgent: null });
     mockSignInWithPassword.mockResolvedValue({ data: {}, error: { message: "bad creds" } });
