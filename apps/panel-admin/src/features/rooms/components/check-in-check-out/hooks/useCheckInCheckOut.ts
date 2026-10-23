@@ -3,7 +3,10 @@ import {
   CHECK_IN_TIME_SLOTS,
   CHECK_OUT_TIME_SLOTS,
 } from "@/features/rooms/constants/checkInCheckOut.constants";
-import { scheduleService } from "@/features/rooms/services/scheduleService";
+import {
+  getRoomSchedulesAction,
+  saveRoomSchedulesAction,
+} from "@/features/rooms/services/scheduleActions";
 import { useI18n } from "@/locales";
 
 export const useCheckInCheckOut = (roomId: string, onSuccess?: () => void) => {
@@ -20,7 +23,8 @@ export const useCheckInCheckOut = (roomId: string, onSuccess?: () => void) => {
     const loadData = async () => {
       try {
         setIsLoading(true);
-        const schedules = await scheduleService.getRoomSchedules(roomId);
+        const { data: schedules, error: loadError } = await getRoomSchedulesAction(roomId);
+        if (loadError) throw new Error(loadError);
 
         const checkIns = schedules
           .filter((s) => s.schedule_type === "check_in")
@@ -51,10 +55,11 @@ export const useCheckInCheckOut = (roomId: string, onSuccess?: () => void) => {
     setIsSubmitting(true);
     setError(null);
     try {
-      await scheduleService.saveRoomSchedules(roomId, {
+      const { error: saveError } = await saveRoomSchedulesAction(roomId, {
         checkIn: selectedCheckIn,
         checkOut: selectedCheckOut,
       });
+      if (saveError) throw new Error(saveError);
       onSuccess?.();
     } catch (err) {
       console.error("Failed to save schedules", err);

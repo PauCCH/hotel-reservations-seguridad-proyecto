@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import type { Amenity } from "@/features/rooms/domain/amenity.interface";
-import { saveRoomAmenitiesAction } from "@/features/rooms/services/amenityActions";
-import { amenityService } from "@/features/rooms/services/amenityService";
+import {
+  getRoomAmenitiesFormDataAction,
+  saveRoomAmenitiesAction,
+} from "@/features/rooms/services/amenityActions";
 import { useI18n } from "@/locales";
 import type { AmenitiesFormValues } from "../AmenitiesForm.interface";
 import { AMENITIES_FORM_CONSTANTS } from "../constants/amenitiesForm.constants";
@@ -33,12 +35,10 @@ export const useAmenitiesForm = (roomId: string, onSuccess?: () => void) => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [predefined, roomSelected] = await Promise.all([
-          amenityService.getPredefinedAmenities(),
-          amenityService.getRoomAmenities(roomId),
-        ]);
-        setAmenities(predefined);
-        setValue(FORM_FIELD, roomSelected);
+        const { data, error } = await getRoomAmenitiesFormDataAction(roomId);
+        if (error || !data) throw new Error(error ?? "No data");
+        setAmenities(data.predefined);
+        setValue(FORM_FIELD, data.roomSelected);
       } catch (error) {
         console.error(LOG_MESSAGES.LOAD_ERROR, error);
       } finally {

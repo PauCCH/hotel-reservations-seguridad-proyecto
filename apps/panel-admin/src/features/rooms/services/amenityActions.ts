@@ -7,6 +7,25 @@ import { ROUTES } from "@/config/routes";
 import { amenityService } from "./amenityService";
 
 /**
+ * Server Action to load the amenity catalog and the room's current selection.
+ * Server-side like the writes, since session cookies are HttpOnly (P3.3).
+ */
+export async function getRoomAmenitiesFormDataAction(roomId: string) {
+  const cookieStore = await cookies();
+  const supabase = createSupabaseServerClient(cookieStore);
+
+  try {
+    const [predefined, roomSelected] = await Promise.all([
+      amenityService.getPredefinedAmenities(supabase),
+      amenityService.getRoomAmenities(roomId, supabase),
+    ]);
+    return { data: { predefined, roomSelected }, error: null };
+  } catch (error) {
+    return { data: null, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
+
+/**
  * Server Action to save room amenities selection.
  */
 export async function saveRoomAmenitiesAction(roomId: string, amenityIds: string[]) {
