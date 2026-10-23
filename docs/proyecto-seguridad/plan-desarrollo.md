@@ -220,7 +220,7 @@ mensajes de error que permiten enumerar usuarios, reflejo de parámetros en pág
 - [x] P3.3 Parches del vector 3 + cookies `HttpOnly`/`Secure`/`SameSite`.
 - [x] P3.4 Auditoría del módulo: eventos de auth saneados vía API de Fabian.
 - [x] P3.5 Tests de regresión + riesgo residual por hallazgo.
-- [ ] P3.6 Entregar `auth/fase-3-parches.md`.
+- [x] P3.6 Entregar `auth/fase-3-parches.md`.
 - [ ] P3.7 Grabar video (≤ 5 min, solo IDE).
 
 **Bitácora**
