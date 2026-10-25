@@ -120,3 +120,6 @@ export const CHECKOUT_HTTP_STATUS = Object.freeze({
 
 /** Reservation status that does NOT block availability (frees the room). */
 export const RESERVATION_STATUS_CANCELLED = "cancelled";
+
+/** `metadata.source` of the audit event written for a checkout booking (A3.4). */
+export const RESERVATION_AUDIT_SOURCE = "portal-checkout";
