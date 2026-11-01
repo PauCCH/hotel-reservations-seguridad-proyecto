@@ -65,14 +65,14 @@ Cuando la persona se identifique:
 
 ## 2. Tablero de estado (actualizar siempre)
 
-_Última actualización: 2026-10-24_
+_Última actualización: 2026-10-31_
 
 | Integrante | Módulo | Fase actual | Próxima tarea | Rama activa | Bloqueos |
 |---|---|---|---|---|---|
 | Paula | Autenticación | 3 — Remediación | Commit + PR de P3.5 + P3.6 (`auth/fase-3-parches.md` listo); luego P3.7 (video) y G3.1 (matriz de riesgo residual) | `security/auth/fase3-reporte-parches` (P3.5 + P3.6 commiteados, sin push ni PR; P3.1–P3.4 mergeados: PR #19, #20, #21) | P3.5 alimenta G3.1 (matriz de riesgo residual, la consolida Paula) y P3.6 alimenta G3.2 (reporte de parches, Joseph) |
 | Joseph | Gestión de Usuarios | 2 — Evaluación ofensiva | J2.1 Vector 1 — servidor (A03 + A01) | — | — |
-| Aarón | Operaciones / Transacciones | 3 — Remediación | A3.7 (video ≤ 5 min de A3.1–A3.4); luego G4 (paquete final) | `security/operations/fase3-audit-logging` (PR de A3.4 abierto, pendiente revisión cruzada) | — (A3.4 desbloqueada por PR #18 de Fabian) |
-| Fabian | Logs / Auditoría | 2 — cerrada, pendiente G2 | Esperar G2 (consolidación del doc de PoCs) hasta que Paula/Joseph/Aarón cierren P2.4/J2.4/A2.4; mientras, puede adelantar Fase 3 (F3.1) | `security/audit/fase2-pocs` | G2 depende de los otros 3 módulos |
+| Aarón | Operaciones / Transacciones | 3 — Remediación | A3.7 (video ≤ 5 min de A3.1–A3.4); luego G4 (paquete final) | `security/operations/fase3-checkout-rooms-catalog` (PR #16) | A3.4 bloqueada por la util de saneo de Fabian (F3.3/F3.4) |
+| Fabian | Logs / Auditoría | 3 — Remediación (F3.1–F3.6 hechas) | Revisión cruzada del PR #23 (G3.3), aplicar migraciones de auditoría al Supabase remoto, G2 (documento de PoCs consolidado) y F3.7 (video) | — (PR #18 mergeado) | Ninguno propio. G3.1/G3.2 esperan a Joseph (J3.5/J3.6) |
 
 ### Estado global del repo
 - [x] Monorepo levantable con `.env` de Supabase/Resend (2026-09-28).
@@ -423,7 +423,7 @@ de hash) y cobertura de eventos de los otros módulos.
 - [x] F3.3 Parches del vector 3 (normalizar/sanitizar cabeceras y campos, origen de IP confiable, firma o hash encadenado).
 - [x] F3.4 Guía de uso de la API de auditoría para los demás módulos (`audit/guia-api-auditoria.md`).
 - [x] F3.5 Tests de regresión + riesgo residual por hallazgo.
-- [ ] F3.6 Entregar `audit/fase-3-parches.md`.
+- [x] F3.6 Entregar `audit/fase-3-parches.md`.
 - [ ] F3.7 Grabar video (≤ 5 min, solo IDE).
 
 **Bitácora**
@@ -438,6 +438,7 @@ de hash) y cobertura de eventos de los otros módulos.
 | 2026-10-16 | Re-verificación F2.1/F2.2 con navegador real (Playwright+Chromium) en vez de solo curl, a pedido de Fabian; confirma ejecución real del XSS (no solo inspección de código) | `security/audit/fase2-pocs`, commit `235ed73` | Hecho |
 | 2026-10-16 | F2.4 Revisión de `audit/fase-2-pocs.md` contra la plantilla §4.5: las 6 PoCs completas (AUD-POC-3 como hallazgo de soporte, sin repro activo por diseño); push de la rama a `origin` y PR contra `develop` | `security/audit/fase2-pocs` | Hecho |
 | 2026-10-21 | F3.1–F3.5: 7 parches (AUD-PAT-1 a 7) con 65 tests en verde, re-prueba en navegador real de las PoCs 1, 2, 4, 5 y 6 (la 3 no es observable en vivo: el tope de 100 supera las filas existentes; lo cubre un test). **Hallazgo nuevo:** `logAuditEvent` era una Server Action pública (cualquier anónimo falsificaba eventos); corregido con `@hotel/core/audit/server`. Guía de la API publicada para P3.4/J3.4/A3.4. Las migraciones append-only y hash encadenado solo se probaron en Postgres local; **sin aplicar al Supabase remoto** | `security/audit/fase3-parches-v1`, commits `56c053c`…`9404908` | Hecho en la rama; pendiente PR, F3.6 (entrega) y F3.7 (video) |
+| 2026-10-21 | F3.6 Entrega de la Fase 3: PR #18 mergeado a `develop` (merge `91b169c`); `audit/fase-3-parches.md` con ficha, diff, regresión y riesgo residual por parche | `security/audit/fase3-parches-v1`, PR #18 | Hecho; pendiente F3.7 (video), aplicar migraciones al Supabase remoto y G2 |
 
 ---
 

@@ -13,7 +13,7 @@
 | **Responsable** | Fabian |
 | **Módulo** | Logs / Auditoría (`audit`) |
 | **Rama** | `security/audit/fase3-parches-v1` (desde `develop@e32fd48`) |
-| **PR** | _pendiente (F3.6)_ |
+| **PR** | #18 (merge `91b169c`) |
 | **Línea base vulnerable** | `develop@e32fd48` / PoCs de `fase-2-pocs.md` |
 
 | Commit | Contenido |
