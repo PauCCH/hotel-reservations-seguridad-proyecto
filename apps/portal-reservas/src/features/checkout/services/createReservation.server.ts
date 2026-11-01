@@ -1,5 +1,3 @@
-"use server";
-
 /**
  * @file createReservation.server.ts — Persists a reservation row at checkout.
  *
@@ -20,6 +18,11 @@
  * `reservations` has RLS enabled with NO policies (deny-all), so a public
  * checkout has nothing to insert as except the service-role client — the same
  * pattern already used by `reservationService.ts` and `galleryActions.ts`.
+ *
+ * Intentionally NOT a "use server" module (A3.4 hardening): that would expose
+ * `persistReservation` / `areRoomsAvailable` as public Server Actions callable
+ * without the route's Origin check and Zod validation. Only
+ * `gateway.server.ts` (called from `POST /api/checkout`) imports it.
  */
 
 import type { Room } from "@/features/rooms";
@@ -57,7 +60,15 @@ export async function areRoomsAvailable(
 /** Postgres SQLSTATE for an exclusion-constraint violation (reservations_no_overlap). */
 const PG_EXCLUSION_VIOLATION = "23P01";
 
-export type PersistReservationResult = { ok: true } | { ok: false; reason: "conflict" | "error" };
+/** One inserted reservation row, returned so the caller can audit it (A3.4). */
+export interface PersistedReservationRow {
+  id: string;
+  room_id: string;
+}
+
+export type PersistReservationResult =
+  | { ok: true; reservations: PersistedReservationRow[] }
+  | { ok: false; reason: "conflict" | "error" };
 
 /**
  * Inserts one reservation row per booked room in a single statement, so the
@@ -74,20 +85,23 @@ export async function persistReservation(
   const supabase = createSupabaseServiceClient();
   const c = DB_COLUMNS.reservations;
 
-  const { error } = await supabase.from(DB_TABLES.RESERVATIONS).insert(
-    rooms.map((room, i) => ({
-      [c.guest_name]: payload.fullName,
-      [c.guest_email]: payload.email,
-      [c.guest_phone]: payload.phone,
-      [c.guest_notes]: payload.specialRequests,
-      [c.room_id]: roomDbIds[i],
-      [c.check_in]: payload.checkIn,
-      [c.check_out]: payload.checkOut,
-      [c.adults]: payload.guests > 0 ? payload.guests : 1,
-      [c.price_per_night]: room.price,
-      [c.total_amount]: room.price * nights,
-    })),
-  );
+  const { data, error } = await supabase
+    .from(DB_TABLES.RESERVATIONS)
+    .insert(
+      rooms.map((room, i) => ({
+        [c.guest_name]: payload.fullName,
+        [c.guest_email]: payload.email,
+        [c.guest_phone]: payload.phone,
+        [c.guest_notes]: payload.specialRequests,
+        [c.room_id]: roomDbIds[i],
+        [c.check_in]: payload.checkIn,
+        [c.check_out]: payload.checkOut,
+        [c.adults]: payload.guests > 0 ? payload.guests : 1,
+        [c.price_per_night]: room.price,
+        [c.total_amount]: room.price * nights,
+      })),
+    )
+    .select(`${c.id}, ${c.room_id}`);
 
   if (error) {
     // A3.3 hardening: the `reservations_no_overlap` EXCLUDE constraint rejects a
@@ -98,5 +112,5 @@ export async function persistReservation(
     return { ok: false, reason: "error" };
   }
 
-  return { ok: true };
+  return { ok: true, reservations: (data ?? []) as PersistedReservationRow[] };
 }

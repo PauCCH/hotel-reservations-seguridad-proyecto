@@ -6,7 +6,7 @@
 | Responsable | Aarón Líos Cubillo |
 | Rama | `security/operations/fase3-parches` (creada **desde** `security/operations/fase2-pocs`, para aplicar los fixes sobre las vulnerabilidades introducidas/reales y comprobar que la PoC deja de funcionar — §4.1) |
 | Insumo | `operations/fase-2-pocs.md` (OP-POC-1 … OP-POC-6) |
-| Estado | A3.1, A3.2 y A3.3 completos (los 3 vectores parcheados). A3.4 pendiente (bloqueado por la utilidad de saneo de Fabian). |
+| Estado | A3.1, A3.2 y A3.3 completos (los 3 vectores parcheados). A3.4 implementada con la API de auditoría de Fabian y verificada en vivo (rama `security/operations/fase3-audit-logging`); pendiente PR. |
 
 > Formato por parche según §4.6: ficha · mapeo · diff antes/después · prueba de regresión · riesgo residual.
 
@@ -21,7 +21,7 @@
 | OP-POC-3 | 2 — XSS stored | Escape de salida (`{guest.notes}`) | **Bajo** |
 | OP-POC-4 | 3 — CSRF | Verificación de `Origin` | **Medio** (sin token anti-CSRF ni rate limiting) |
 | OP-POC-5 | 3 — manipulación de parámetros | Esquema Zod + capacidad (fechas/aforo); disponibilidad + `EXCLUDE` + catálogo de rooms reconciliado | **Bajo** (fechas/aforo y disponibilidad/TOCTOU verificados en vivo, ver A3.3) |
-| OP-POC-6 | 3 — log injection | — (A3.4 pendiente) | **Alto** (sin remediar: operaciones aún no registra ni sanea logs) |
+| OP-POC-6 | 3 — log injection | `logAuditEvent` en creación y cambio de estado de reservas, saneado por la API (A3.4) | **Bajo** (verificado en vivo, ver A3.4) |
 
 ---
 
@@ -257,24 +257,113 @@ exclusión a nivel de BD (`EXCLUDE`) es la autoridad final ante la carrera TOCTO
 
 ---
 
-## A3.4 — OP-POC-6 · Log injection / cobertura de auditoría — **PENDIENTE (bloqueado)**
+## A3.4 — OP-POC-6 · Log injection / cobertura de auditoría
 
-**Estado.** No remediado todavía. Operaciones aún no registra eventos de auditoría (brecha DETECT real,
-OP-POC-6). El parche A3.4 debe: (a) instrumentar `logAuditEvent` en creación/cambio de estado de reservas, y
-(b) **sanitizar** los campos libres (`guest_notes`, `guest_name`) antes de registrarlos, reutilizando la
-utilidad de saneo que Fabian expone en **F3.3/F3.4**.
+**Ficha.** Responsable: Aarón · Módulo: operations · Rama: `security/operations/fase3-audit-logging`
+(desde `develop@1e6ce17`) · Commit: _pendiente_ · PR: _pendiente_.
 
-**Bloqueo.** Depende de que Fabian publique esa utilidad y la guía de uso de la API de auditoría (F3.4). Sin
-ella, instrumentar el logging reintroduciría AU-R04 (log injection) en los eventos de operaciones.
+**Mapeo.** OWASP A09 (Security Logging and Monitoring Failures) + A08/CWE-117 (log injection, cubierto por la
+API). NIST CSF 2.0: DE.CM-09, DE.AE-03, PR.PS-04. Archivos:
+`apps/portal-reservas/src/features/checkout/services/gateway.server.ts`,
+`apps/portal-reservas/src/features/checkout/services/createReservation.server.ts`,
+`apps/panel-admin/src/features/reservations/services/reservationService.ts`.
 
-**Riesgo residual actual: Alto** (sin control DETECT en el módulo). Baja a **Bajo** una vez cerrada A3.4 con
-saneo. Coordinación en `operations/fase-2-pocs.md` §Coordinación y con la bitácora de Fabian.
+**Desbloqueo.** Fabian publicó en `develop` (PR #18) la API `@hotel/core/audit/server`, el saneo al escribir
+(`audit/shared/sanitize.ts`: CR/LF y caracteres de control → espacio, corte a 512) y las constantes
+`RESERVATION_*` (`audit/guia-api-auditoria.md`). A3.4 la usa tal cual; no se duplica el saneo.
+
+**Qué se registra.**
+
+| Evento | Dónde | Actor | `metadata` |
+|---|---|---|---|
+| `reservation.created` (uno por fila/habitación) | `openGatewaySession`, después de que `persistReservation` inserta | `null` (el checkout es anónimo) | `source`, `room_id`, `check_in`, `check_out`, `nights`, `guests`, `total_amount` |
+| `reservation.updated` | `updateReservationStatus`, después de `requirePermission(reservations:edit)` y del `UPDATE` | admin verificado (`getVerifiedSession` → `getUser()`) | `from`, `to` |
+| `reservation.cancelled` | ídem, cuando `to = cancelled` | ídem | `from`, `to`, `cancellation_reason` |
+
+Decisiones (reglas §5 de la guía):
+- **Sin PII ni texto libre del huésped** en el evento de creación: ni nombre, ni email, ni teléfono, ni
+  `guest_notes` (el vector de OP-POC-3). Tampoco el `code` de la reserva, que junto al email permite consultarla
+  (OP-POC-1). Solo valores ya validados por Zod o calculados en servidor.
+- El email del huésped **no** va en `actorEmail` (sería el objetivo, no quien actúa).
+- `cancellation_reason` sí se guarda (lo escribe un admin autenticado y es la justificación del cambio); la API
+  lo sanea al escribir.
+- Solo se registra lo que ocurrió: un checkout rechazado (400/403/409), un `UPDATE` fallido, un id inexistente o
+  un admin sin permiso no generan evento.
+- `logAuditEvent` se llama desde `gateway.server.ts` y `reservationService.ts`, que **no** son módulos
+  `"use server"` (regla §1 de la guía).
+- **Endurecimiento:** se quita `"use server"` de `createReservation.server.ts`. Con esa directiva,
+  `persistReservation` y `areRoomsAvailable` podían quedar expuestas como Server Actions públicas, invocables sin
+  el chequeo de `Origin` ni la validación Zod del route handler. No se demostró la explotación; se elimina la
+  superficie porque el archivo solo lo importa `gateway.server.ts`. Re-test en vivo tras el cambio: checkout →
+  200 y `reservation.created` (seq 10), cadena íntegra.
+
+**Diff (antes → después).**
+```ts
+// ANTES: persistReservation no devolvía nada y nadie registraba la reserva.
+const { error } = await supabase.from(RESERVATIONS).insert(rows);
+return { ok: true };
+
+// DESPUÉS: devuelve las filas creadas y el gateway registra una por habitación.
+const { data, error } = await supabase.from(RESERVATIONS).insert(rows).select("id, room_id");
+return { ok: true, reservations: data };
+// gateway.server.ts
+for (const reservation of persisted.reservations) {
+  await logAuditEvent({ actorId: null, actorEmail: null, action: AUDIT_ACTIONS.RESERVATION_CREATED,
+    entity: AUDIT_ENTITIES.RESERVATION, entityId: reservation.id, metadata: { room_id, check_in, … },
+    ipAddress, userAgent });
+}
+```
+```ts
+// ANTES: updateReservationStatus cambiaba el estado sin dejar rastro.
+await requirePermission(PERMISSIONS.RESERVATIONS.EDIT);
+await supabase.from(RESERVATIONS).update(updateData).eq("id", id);
+
+// DESPUÉS: lee el estado previo, actualiza y registra from → to con el admin verificado.
+const { data: previous } = await supabase.from(RESERVATIONS).select("status").eq("id", id).maybeSingle();
+await supabase.from(RESERVATIONS).update(updateData).eq("id", id);
+if (!previous) return;
+const { user } = await getVerifiedSession(createSupabaseServerClient(await cookies()));
+await logAuditEvent({ actorId: user?.id, action: isCancellation ? RESERVATION_CANCELLED : RESERVATION_UPDATED,
+  entityId: id, metadata: { from: previous.status, to: status, … }, ipAddress, userAgent });
+```
+
+**Prueba de regresión (Vitest).**
+- `apps/portal-reservas/src/features/checkout/services/gateway.server.test.ts` (4 casos): un evento
+  `reservation.created` por fila con actor nulo y metadata exacta; el payload de OP-POC-3/AUD-POC-6
+  (`<img onerror>` + `\r\n` + línea falsa) y la PII del huésped **no** aparecen en el evento; 409 y payload
+  inválido no registran nada.
+- `apps/panel-admin/tests/reservations/updateReservationStatus.test.ts` (5 casos): aprobación →
+  `reservation.updated` con `from/to` y el admin real; cancelación → `reservation.cancelled` con motivo; sin
+  `reservations:edit`, con `UPDATE` fallido o con id inexistente → sin evento.
+- Suites completas en verde: portal 66/66, panel 24/24. Type-check sin errores nuevos (los de `@hotel/db` y
+  galería son preexistentes de `develop`).
+
+**Prueba de regresión (en vivo, Supabase local, 2026-10-24)** — `evidencias/A3.4-audit-logging-live.txt`:
+
+| # | Caso | Esperado | Obtenido |
+|---|---|---|---|
+| 1 | Checkout `[mv-3, lf-4]` con XSS + CR/LF en nombre y notas | 200 + 2 × `reservation.created`, sin PII ni payload | ✅ seq 4 y 5, actor nulo; búsqueda de PII/payload en `metadata` → 0 |
+| 2 | Mismo checkout con `Origin` ajeno / fechas ocupadas | 403 / 409, sin evento | ✅ `max(seq)` sigue en 5 |
+| 3 | Aprobar reserva en el panel (owner) | `reservation.updated` con `from/to` y actor | ✅ seq 7, `pending → approved`, `sec.owner@hotel.local` |
+| 4 | Cancelar con motivo que trae CR/LF | `reservation.cancelled`, motivo en una línea | ✅ seq 8; CR/LF en el log: no (en `reservations`: sí) |
+| 5 | Visor `/admin/audit-log` | Los 4 eventos visibles | ✅ |
+| 6 | `verify_audit_chain()` | Cadena íntegra | ✅ `NULL` |
+
+El caso "admin sin `reservations:edit`" no se repitió en vivo; lo cubre el test del panel.
+
+**Riesgo residual de OP-POC-6: Bajo (verificado en vivo).** El módulo ya deja
+rastro de cada creación y cambio de estado, con actor verificado en el panel, y el saneo CWE-117 lo garantiza la
+API de Fabian (append-only + hash encadenado cuando sus migraciones están aplicadas). **Límites declarados:**
+- Los intentos **rechazados** (CSRF 403, payload 400, solapamiento 409, `PermissionDeniedError`) no se registran.
+  Detectar ataques en curso requeriría un evento de rechazo (`AUTH_ACCESS_DENIED` o uno nuevo de reservas, en el
+  archivo compartido de Fabian).
+- No existe en el código una ruta para borrar o editar fechas de una reserva, así que `reservation.deleted` no
+  tiene dónde cablearse.
+- La IP queda `null` mientras `AUDIT_TRUSTED_PROXY_HOPS` no se fije para el despliegue real (pendiente AU-X03).
 
 ---
 
 ## Pendientes de la fase
 
-- **A3.4** — logging saneado (arriba), al liberar Fabian su utilidad.
-- **A3.7** — video ≤ 5 min (solo IDE) explicando las líneas de A3.1–A3.3.
-- **Evidencias en vivo** — capturas de regresión (XSS mostrado como texto, 403 de CSRF, 400/409 de parámetros)
-  en un entorno con Supabase conectado; compartidas con A2.4.
+- **A3.4** — PR (código, tests y evidencia en vivo listos).
+- **A3.7** — video ≤ 5 min (solo IDE) explicando las líneas de A3.1–A3.4.
