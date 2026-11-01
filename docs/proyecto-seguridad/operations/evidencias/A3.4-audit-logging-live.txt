@@ -1,0 +1,127 @@
+A3.4 / OP-POC-6 — Evidencia en vivo del logging de auditoría de Operaciones
+============================================================================
+
+Fecha: 2026-10-24
+Rama: security/operations/fase3-audit-logging (desde develop@1e6ce17)
+Entorno: Supabase LOCAL (`supabase start`, Docker), sin tocar el proyecto compartido.
+  - Migraciones pendientes aplicadas en local con `supabase migration up --local --include-all`:
+    20260922000003 (audit_logs append-only), 20260922000004 (hash encadenado),
+    20261021000001 y 20261021000002 (Paula, P3.1). Estado: 31/31.
+  - portal-reservas en :3001 y panel-admin en :3002 (`pnpm dev`), ambos contra http://127.0.0.1:54321.
+  - Cuenta de prueba del panel: sec.owner@hotel.local (rol owner, de `packages/db/scripts/seed-security-admins.mjs`).
+  - AUDIT_TRUSTED_PROXY_HOPS sin definir (0) → ip_address = NULL, que es lo esperado en local (guía de Fabian §6).
+
+Línea base antes de la prueba: audit_logs con 3 filas (max seq = 3), todas auth.login.success del 2026-10-20.
+Ninguna fila de reservas: OP-POC-6 (operaciones no registraba eventos).
+
+
+1) Checkout público (anónimo) con payload malicioso → reservation.created
+-------------------------------------------------------------------------
+
+Payload enviado a POST /api/checkout (Origin: http://localhost:3001, User-Agent: A3.4-live-evidence/1.0):
+
+  roomIds         ["mv-3", "lf-4"]
+  checkIn/out     2026-12-10 → 2026-12-12, guests 2
+  email           a3.4-live@poc.local
+  fullName        "A34 Live\r\naction=audit.log.purged actor=owner@hotel.local"
+  phone           8888-0000
+  specialRequests "<img src=x onerror=alert(document.cookie)>\r\n2026-10-24 action=reservation.deleted actor=owner@hotel.local"
+
+Respuesta:
+  HTTP/1.1 200 OK
+  {"url":"http://localhost:3001/reserve/success?session_id=mock_1792887444738"}
+
+Reservas persistidas (una por habitación):
+  581567fd-c0a2-49ce-be97-b94d81ed5f2a | room 0a330000-…-000000000103 (mv-3) | pending
+  197de896-8be1-4a5a-8c84-2e62e13db6e4 | room 0a330000-…-000000000204 (lf-4) | pending
+
+Filas nuevas en audit_logs:
+
+ seq | action              | entity      | entity_id                            | actor | user_agent             | metadata
+-----+---------------------+-------------+--------------------------------------+-------+------------------------+----------------------------------------------------------------------------------------------------------
+   4 | reservation.created | reservation | 581567fd-c0a2-49ce-be97-b94d81ed5f2a | (nulo)| A3.4-live-evidence/1.0 | {"guests":2,"nights":2,"source":"portal-checkout","room_id":"…000103","check_in":"2026-12-10","check_out":"2026-12-12","total_amount":640}
+   5 | reservation.created | reservation | 197de896-8be1-4a5a-8c84-2e62e13db6e4 | (nulo)| A3.4-live-evidence/1.0 | {"guests":2,"nights":2,"source":"portal-checkout","room_id":"…000204","check_in":"2026-12-10","check_out":"2026-12-12","total_amount":1700}
+
+Resultado: ✅ un evento por fila, actor nulo (checkout anónimo), metadata solo con valores validados/calculados en servidor.
+Ni el nombre, ni el email, ni el teléfono, ni las notas (payload XSS + línea falsa) llegan al log:
+
+  select count(*) filter (where metadata::text ~* 'onerror|a3.4-live|8888-0000|A34 Live')
+  from audit_logs where action like 'reservation.%';
+  → 0
+
+
+2) Checkouts rechazados → sin evento
+------------------------------------
+
+  Mismo payload con Origin: https://evil.example  → 403 (anti-CSRF de A3.3)
+  Mismo payload otra vez (fechas ya ocupadas)     → 409 (disponibilidad / EXCLUDE de A3.3)
+  max(seq) después: 5 (sin filas nuevas)
+
+Resultado: ✅ solo se registra lo que ocurrió. (Límite declarado: los intentos rechazados no dejan rastro.)
+
+
+3) Panel: aprobar una reserva → reservation.updated
+---------------------------------------------------
+
+Login en http://localhost:3002/auth/login como sec.owner@hotel.local; detalle de la reserva 581567fd…;
+"Aprobar reserva" → "Guardar cambios" → "Confirmar".
+
+ seq | action              | entity_id                            | actor_email           | actor_id | metadata
+-----+---------------------+--------------------------------------+-----------------------+----------+--------------------------------------
+   6 | auth.login.success  |                                      | sec.owner@hotel.local | sí       | {"requireAdmin": true}
+   7 | reservation.updated | 581567fd-c0a2-49ce-be97-b94d81ed5f2a | sec.owner@hotel.local | sí       | {"to": "approved", "from": "pending"}
+
+Resultado: ✅ actor = admin verificado (getUser()), estado previo → nuevo.
+
+
+4) Panel: cancelar con motivo que trae CR/LF → reservation.cancelled saneado
+---------------------------------------------------------------------------
+
+Reserva 197de896…; "Cancelar reserva" con motivo:
+  "Solicitud del huesped\r\n2026-10-24 action=audit.log.purged actor=owner@hotel.local"
+
+ seq | action                | entity_id                            | actor_email           | metadata
+-----+-----------------------+--------------------------------------+-----------------------+---------------------------------------------------------------------------------------------------------------
+   8 | reservation.cancelled | 197de896-8be1-4a5a-8c84-2e62e13db6e4 | sec.owner@hotel.local | {"to":"cancelled","from":"pending","cancellation_reason":"Solicitud del huesped 2026-10-24 action=audit.log.purged actor=owner@hotel.local"}
+
+  cancellation_reason en audit_logs contiene CR/LF:   false   (la API de Fabian los reemplaza por espacio)
+  cancellation_reason en reservations contiene CR/LF: true    (el dato de negocio se guarda tal cual)
+
+Resultado: ✅ la línea falsa queda dentro del mismo campo, en una sola línea; no se puede fabricar una entrada
+de log aparte (CWE-117 / AU-R04).
+
+
+5) Visor del panel (/admin/audit-log), texto de la página
+---------------------------------------------------------
+
+Historial de eventos del sistema: 8
+Fecha                   Acción                 Actor                  Entidad      Detalles
+Oct 25, 2026, 12:19 AM  reservation.cancelled  sec.owner@hotel.local  reservation  to=cancelled, from=pending, cancellation_reason=Solicitud del huesped 2026-10-24…
+Oct 25, 2026, 12:18 AM  reservation.updated    sec.owner@hotel.local  reservation  to=approved, from=pending
+Oct 25, 2026, 12:18 AM  auth.login.success     sec.owner@hotel.local  —            requireAdmin=true
+Oct 25, 2026, 12:17 AM  reservation.created    —                      reservation  guests=2, nights=2, source=portal-checkout, room_id=0a330000-0000-4000-8000-0000…
+Oct 25, 2026, 12:17 AM  reservation.created    —                      reservation  guests=2, nights=2, source=portal-checkout, room_id=0a330000-0000-4000-8000-0000…
+(la hora del visor está en UTC; 2026-10-24 local)
+
+
+6) Integridad (hash encadenado de Fabian)
+-----------------------------------------
+
+ seq | action                | prev_hash    | row_hash
+-----+-----------------------+--------------+-------------
+   4 | reservation.created   | 156df90db050 | 38d176395bdf
+   5 | reservation.created   | 38d176395bdf | d69e428a84c3
+   6 | auth.login.success    | d69e428a84c3 | f15dc2fce0aa
+   7 | reservation.updated   | f15dc2fce0aa | 694b4865c9d3
+   8 | reservation.cancelled | 694b4865c9d3 | 2aad30cdbb05
+
+  select public.verify_audit_chain();  → NULL (cadena íntegra)
+
+Resultado: ✅ los eventos de operaciones entran en la misma cadena append-only.
+
+
+No cubierto en vivo (cubierto por test automatizado)
+----------------------------------------------------
+- Admin sin reservations:edit → PermissionDeniedError y sin evento:
+  apps/panel-admin/tests/reservations/updateReservationStatus.test.ts
+- UPDATE fallido / id inexistente → sin evento: mismo archivo.

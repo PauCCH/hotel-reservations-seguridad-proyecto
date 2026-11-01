@@ -1,5 +1,9 @@
-import { DB_COLUMNS, DB_TABLES } from "@hotel/db";
+import { AUDIT_ACTIONS, AUDIT_ENTITIES } from "@hotel/core/audit";
+import { getAuditRequestContext, logAuditEvent } from "@hotel/core/audit/server";
+import { getVerifiedSession } from "@hotel/core/auth";
+import { createSupabaseServerClient, DB_COLUMNS, DB_TABLES } from "@hotel/db";
 import { createSupabaseServiceClient } from "@hotel/db/client";
+import { cookies } from "next/headers";
 import { requirePermission } from "@/shared/auth/requirePermission";
 import { PERMISSIONS } from "@/shared/constants/permissions";
 import { RESERVATION_STATUS } from "../constants/reservation-statuses";
@@ -38,6 +42,13 @@ export async function updateReservationStatus(
 
   const supabase = createSupabaseServiceClient();
 
+  // A3.4: read the current status first so the audit event records from → to.
+  const { data: previous } = await supabase
+    .from(DB_TABLES.RESERVATIONS)
+    .select(DB_COLUMNS.reservations.status)
+    .eq(DB_COLUMNS.reservations.id, id)
+    .maybeSingle();
+
   const updateData: ReservationStatusUpdate = {
     status,
     updated_at: new Date().toISOString(),
@@ -52,6 +63,31 @@ export async function updateReservationStatus(
     .eq(DB_COLUMNS.reservations.id, id);
 
   if (error) throw new Error(`${ERRORS.UPDATE_STATUS}: ${error.message}`);
+
+  // A3.4 / OP-POC-6: audit the change with the verified admin as actor. Only
+  // existing reservations are logged (an unknown id updates no row).
+  if (!previous) return;
+
+  const { user } = await getVerifiedSession(createSupabaseServerClient(await cookies()));
+  const { ipAddress, userAgent } = await getAuditRequestContext();
+  const isCancellation = status === RESERVATION_STATUS.CANCELLED;
+
+  await logAuditEvent({
+    actorId: user?.id ?? null,
+    actorEmail: user?.email ?? null,
+    action: isCancellation
+      ? AUDIT_ACTIONS.RESERVATION_CANCELLED
+      : AUDIT_ACTIONS.RESERVATION_UPDATED,
+    entity: AUDIT_ENTITIES.RESERVATION,
+    entityId: id,
+    metadata: {
+      from: (previous as { status: string }).status,
+      to: status,
+      ...(isCancellation && cancellationReason ? { cancellation_reason: cancellationReason } : {}),
+    },
+    ipAddress,
+    userAgent,
+  });
 }
 
 export async function getReservationById(id: string): Promise<Reservation | null> {
