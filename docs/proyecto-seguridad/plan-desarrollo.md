@@ -71,7 +71,7 @@ _Última actualización: 2026-11-03_
 |---|---|---|---|---|---|
 | Paula | Autenticación | 3 — Remediación (P3.1–P3.6 hechas) | P3.7 (video) y G3.1 (matriz de riesgo residual — borrador en `consolidado/` con los 4 módulos; falta el visto bueno del equipo) | — (P3.1–P3.6 mergeados: PR #19, #20, #21, #22) | G3.1 ya puede empezar: Fase 3 de Joseph mergeada (PR #27) |
 | Joseph | Gestión de Usuarios | 3 — Remediación (J3.1–J3.6 cerradas y mergeadas, PR #27) | J3.7 (video, ≤5 min solo de Fase 3 — no cubre Fase 1–3); G3.2 (Reporte Técnico de Parches, responsable Joseph — sin empezar: solo existen los 4 `fase-3-parches.md` por módulo, falta consolidar) | — (Fase 2 y Fase 3 mergeadas: PR #10, #27) | Ninguno propio. Desbloquea G3.1 (Paula) y G4 (Aarón) |
-| Aarón | Operaciones / Transacciones | 3 — Remediación (A3.1–A3.6 hechas) | A3.7 (video ≤ 5 min de A3.1–A3.4); luego G4 (paquete final) | — (PR #23 mergeado) | G4 depende de G2 (Fabian), G3.1 (Paula) y G3.2 (Joseph) — ya no depende de Joseph directamente, pero sí de que Paula y Joseph terminen sus documentos grupales |
+| Aarón | Operaciones / Transacciones | 3 — Remediación (A3.1–A3.8 hechas, video A3.7 grabado) | G4 (paquete final) | — (PR #23 y #33 mergeados) | G4 depende de G2 (Fabian), G3.1 (Paula) y G3.2 (Joseph) — ya no depende de Joseph directamente, pero sí de que Paula y Joseph terminen sus documentos grupales |
 | Fabian | Logs / Auditoría | 3 — Remediación (F3.1–F3.6 hechas) | Aplicar migraciones de auditoría al Supabase remoto, G2 (documento de PoCs consolidado, ya desbloqueado) y F3.7 (video) | — (PR #18 y #24 mergeados) | Ninguno propio |
 
 ### Estado global del repo
@@ -357,7 +357,7 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 - [x] A3.4 Auditoría del módulo: registrar creación/cambio de reservas vía API de Fabian.
 - [x] A3.5 Tests de regresión + riesgo residual por hallazgo.
 - [x] A3.6 Entregar `operations/fase-3-parches.md`.
-- [ ] A3.7 Grabar video (≤ 5 min, solo IDE).
+- [x] A3.7 Grabar video (≤ 5 min, solo IDE).
 - [x] A3.8 Parchear riesgos de Fase 1 sin PoC: OP-R05 (transiciones de estado) y OP-R07 (`booking_confirmation_mode`).
 
 **Bitácora**
@@ -395,6 +395,7 @@ CSRF en acciones de estado de reserva, integridad del webhook/pasarela de pago, 
 | 2026-11-01 | Corrección del tablero §2: la fila de Aarón había vuelto a un texto viejo ("PR #16", "A3.4 bloqueada") al resolver el conflicto del merge de `develop` en el PR #24 | `docs/plan-sync-aaron` | Hecho |
 | 2026-11-01 | Revisión contra el enunciado y congruencia de los documentos de Operaciones. (1) **OP-POC-6 reescrita como PoC reproducible** de evasión de la auditoría (vector 3, audit poisoning): sobre `develop@1e6ce17` se crean 2 reservas por el checkout y un admin cancela una, y `audit_logs` solo registra el login. (2) **Re-prueba en vivo** de OP-POC-2 (mismo replay de `deleteImage` → `PermissionDeniedError`, fila intacta) y de OP-POC-3 (payload mostrado como texto, 0 `img[onerror]`, CSP con nonce activa), que el reporte daba por verificadas sin evidencia. (3) `fase-3-parches.md`: fichas con PR, commits y rama; encabezado y estado al día; CSP de Paula ya entregada. (4) `fase-2-pocs.md`: hashes reales en "Commit donde se reprodujo" (`cbccfa9`, `e1828a4`, `767a0d6`), payloads con ids reales del catálogo (`mv-1`) y resultados de OP-POC-4/5 ajustados a lo observado (HTTP 200; la fila no se guardaba por el bug de persistencia) | `docs/operations-congruencia`; evidencias `A2.3-OP-POC-6-audit-evasion-live.txt` y `A3.1-A3.2-regression-live.txt` | Hecho; pendiente PR |
 | 2026-11-04 | A3.8 — OP-R05 y OP-R07 (riesgos de Fase 1 que la Matriz de Riesgo Residual dejaba en Medio): `reservation-rules.ts` (enum + `VALID_TRANSITIONS` en el servidor), `updateReservationStatus` con `UPDATE` condicional por el estado validado, `updateBookingMode` valida el enum y audita `system.setting.changed` (acción nueva en el catálogo compartido de Fabián), migración `20261104000001` (trigger de transiciones + `CHECK` del modo). Tests: panel 46/46 (27 de reservas; 19 fallan con el código anterior), core audit 14/14. Re-test en vivo en Supabase local como `service_role`: `cancelled → approved` y `'disabled'` rechazados por la base, flujos legítimos OK (`evidencias/A3.8-op-r05-r07-live.txt`) | `security/operations/fase3-op-r05-r07`, commit `8f5608f`, PR #33 | Hecho; PR #33 abierto (pendiente revisión G3.3), avisar a Fabián (catálogo de auditoría) y actualizar G3.1/G3.2: OP-R05 y OP-R07 pasan a residual Bajo |
+| 2026-11-05 | PR #33 (A3.8) mergeado a `develop` (merge `6f43035`). A3.7: video grabado. Aviso a Fabián: acción `system.setting.changed` en su catálogo y migración `20261104000001` pendiente de aplicar al Supabase remoto. G3.1/G3.2: PR #33 y commit `8f5608f` anotados en la Matriz de Riesgo Residual (OP-R05/OP-R07 en Bajo) y en el Reporte Técnico (sección 3.7), fuera del repo (§4.3) | `security/operations/fase3-op-r05-r07`, PR #33 | Hecho; Fase 3 de Operaciones completa. Queda G4 (paquete final) |
 
 ---
 
