@@ -1,0 +1,54 @@
+Re-prueba en vivo de J3-PAT-9 (auditoria de cambios en el modulo de Usuarios)
+=================================================================================
+
+Fecha: 2026-11-05/06 (UTC). Rama security/users/fase3-evidencia-regresion sobre
+develop@2e2f2b9 (incluye el hardening de J3-PAT-1-9 del commit 4d7c38c). Entorno: Supabase
+LOCAL (Docker). Consulta hecha con psql dentro del contenedor supabase_db_db (no vía la UI).
+
+Se consulto la tabla public.audit_logs filtrando por las ultimas ~2 horas, es decir,
+exactamente las filas generadas por las propias pruebas de regresion de J3-PAT-1, J3-PAT-2/3,
+J3-PAT-4 y J3-PAT-6 hechas en esta misma sesion (ver evidencias/J3-PAT-1-2-3-4-6-regression-
+live.txt) - no se insertaron filas manualmente ni se uso un dataset preparado.
+
+  select action, entity, entity_id, actor_email, metadata, created_at
+  from public.audit_logs
+  where created_at > now() - interval '2 hours'
+  order by created_at;
+
+Resultado (9 filas, orden cronologico):
+
+  auth.login.success      | -          | -                                    | owner@hotel.local | {"requireAdmin":true}
+  user.permission.granted | permission | 6d8af320-...-a178ea81133e (admin)    | owner@hotel.local | {"after":["permissions:manage","view:dashboard","reservations:view"],
+                                                                                                        "before":["permissions:manage","view:dashboard","reservations:view"],
+                                                                                                        "granted":[],"revoked":[]}
+  user.status.changed     | user       | 6d8af320-...-a178ea81133e (admin)    | owner@hotel.local | {"to":false,"from":true}
+  user.status.changed     | user       | 6d8af320-...-a178ea81133e (admin)    | owner@hotel.local | {"to":true,"from":false}
+  user.invited            | user       | b8aa81a2-...-22748ff563e6 (invit.)   | owner@hotel.local | {"email":"qa-poc11-capture@hotel.local","action":"invitation_resent"}
+  user.status.changed     | user       | b8aa81a2-...-22748ff563e6 (invit.)   | owner@hotel.local | {"action":"invitation_revoked"}
+  user.invited            | user       | NULL                                 | owner@hotel.local | {"email":"j3pat6-regresion@hotel.local","full_name":"QA J3-PAT-6 Regresion"}
+  user.status.changed     | user       | 41543772-...-2b2062abfad7 (invit.)   | owner@hotel.local | {"action":"invitation_revoked"}
+  auth.login.success      | -          | -                                    | admin@hotel.local | {"requireAdmin":true}
+
+Correlacion con las pruebas de esta sesion:
+  - Fila 2 (user.permission.granted): llamada a updateUserPermissions confirmando a
+    admin@hotel.local en permissions:manage (la misma llamada que deja a esa cuenta en el
+    estado usado para la regresion de J3-PAT-2/3). granted=[] y revoked=[] porque los
+    permisos pedidos ya coincidian exactamente con los existentes (operacion idempotente) -
+    el evento se audita igual, lo cual es el comportamiento correcto.
+  - Filas 3-4 (user.status.changed): el ciclo desactivar/reactivar admin@hotel.local hecho
+    para capturar el Next-Action de toggleAdminStatus (J3-PAT-4).
+  - Filas 5-6: resendInvitation y revokeInvitation sobre qa-poc11-capture@hotel.local,
+    capturados para obtener los Next-Action de J3-PAT-6.
+  - Filas 7-8: creacion y revocacion del fixture j3pat6-regresion@hotel.local usado para la
+    secuencia limpia de J3-PAT-6 (revoke -> success, resend -> NOT_PENDING, revoke ->
+    ALREADY_REVOKED).
+  - Filas 1 y 9: login de owner@hotel.local y admin@hotel.local respectivamente, auditados
+    por el modulo de autenticacion de Paula (AUTH-POC), confirmando que ese log tambien sigue
+    activo end-to-end junto con el de Usuarios.
+
+OK - Las 4 acciones mutables de este modulo (updateUserPermissions, toggleAdminStatus,
+resendInvitation, revokeInvitation) escriben en audit_logs con actor, entidad y metadata
+correctos en el codigo actual de develop, usando datos generados por pruebas reales de hoy
+(no un fixture preparado de antemano). Confirma ademas lo ya documentado en fase-3-parches.md
+sobre createAdminAccountAction/resendInvitation (seccion 10) con datos frescos para
+updateUserPermissions/toggleAdminStatus/revokeInvitation/resendInvitation.

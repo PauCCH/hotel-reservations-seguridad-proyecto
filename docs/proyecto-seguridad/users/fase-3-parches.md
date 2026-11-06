@@ -16,6 +16,7 @@
 | Línea base vulnerable | `develop@868b95c`                                                                                                                                                |
 | Rama                   | `security/users/fase3-remediacion` (sin commits al momento de escribir este documento — Claude no hace commit/push; ver §9 para el mensaje de commit sugerido) |
 | Rama (adenda J3-PAT-10/11) | `security/users/fase3-parches-faltantes`, creada sobre `security/users/fase2-pocs-faltantes` (que introduce J2-POC-10/11) — ver §§12-14 |
+| Rama (evidencia de regresión completa) | `security/users/fase3-evidencia-regresion`, creada sobre `develop` ya con los 11 parches aplicados — agrega los archivos en `evidencias/` citados en cada sección y las citas correspondientes (request/response HTTP literal, screenshots, stdout del dev server, re-ejecución de Vitest); sin commits al momento de escribir esto — Claude no hace commit/push; ver el mensaje de commit sugerido al final de esta nota |
 | Insumos                | `users/fase-2-pocs.md` (J2-POC-1…9)                                                                                                                             |
 
 **Tests / type-check (J3.5):** `pnpm exec biome check` limpio sobre los 10 archivos propios. `pnpm type-check`
@@ -117,7 +118,9 @@ fetch('/admin/admins', { headers: { 'Next-Action': '409b06a19cd4f0b05120ddc3101f
 ```
 
 Antes del parche este mismo payload devolvía `200` con el arreglo de permisos del owner. Resultado capturado
-en vivo con Playwright contra el panel-admin local.
+en vivo con Playwright contra el panel-admin local. Evidencia completa (request/response literales,
+screenshot del 403 de UI y verificación en BD):
+`evidencias/J3-PAT-1-2-3-4-6-regression-live.txt`, `evidencias/J3-PAT-1-403-admin-page-low-priv.png`.
 
 **Riesgo residual: Bajo.** El guard cierra el vector de la PoC. Riesgo residual: el guard depende de que
 `requirePermission` siga usando `getVerifiedSession` (ver J3-PAT-3) — si esa función se rompiera, el guard
@@ -175,7 +178,9 @@ fetch('/admin/admins', { headers: { 'Next-Action': '6090dad2b1d560459c7d974eaba4
 
 Antes del parche este mismo payload devolvía `200 { "success": true }`, otorgando `admins:revoke` sin que el
 atacante lo tuviera. Se confirmó además que la UI (`/admin/admins`) ya rechaza con `403` a ese mismo usuario
-tras perder `admins:view` — defensa en profundidad adicional a nivel de página.
+tras perder `admins:view` — defensa en profundidad adicional a nivel de página. Evidencia completa (request/
+response literales y verificación en BD de que `newadmin@hotel.local` no quedó con `admins:revoke`):
+`evidencias/J3-PAT-1-2-3-4-6-regression-live.txt`.
 
 **Riesgo residual: Bajo.** El exploit original ya no funciona con ningún objetivo admin real distinto del
 propio owner. Riesgo residual documentado con honestidad: el chequeo de "excedido" compara contra los
@@ -218,7 +223,9 @@ body: '["<uuid-owner>", true]' → 500 PermissionDeniedError: "Permission denied
 ```
 
 El guard de permiso bloquea el intento incluso antes de llegar al chequeo `OWNER_MODIFY`, que es la segunda
-capa de defensa para un admin que sí tuviera `admins:disable`.
+capa de defensa para un admin que sí tuviera `admins:disable`. Evidencia completa (request/response literales
+y verificación en BD de que `owner@hotel.local` siguió `is_active = true`):
+`evidencias/J3-PAT-1-2-3-4-6-regression-live.txt`.
 
 **Riesgo residual: Bajo.** Se eliminó el vector de "cliente decide el estado" y se protegió al owner y al
 propio actor. Residual: el `signOut` fuerza el cierre de todas las sesiones de ese usuario, pero no invalida
@@ -257,6 +264,8 @@ POST /rest/v1/rpc/get_admins  (solo apikey anon, sin sesión) → 200 OK, roster
 POST /rest/v1/rpc/get_admins  (solo apikey anon, sin sesión)
 → 401 { "code": "42501", "message": "permission denied for function get_admins" }
 ```
+
+Evidencia completa (request/response HTTP literal vía curl): `evidencias/J3-PAT-5-8-regression-live.txt`.
 
 Se verificó además que el camino legítimo interno (`getUserPermissionsList()` vía cliente `service_role`)
 sigue funcionando — un primer intento del parche (`AND public.is_admin_or_owner()` sin el `OR auth.role() = 'service_role'`) rompió ese camino porque `auth.uid()` es `NULL` para el `service_role`; el bug se detectó en
@@ -309,7 +318,9 @@ body: '["<uuid-invitacion-revocada>"]' → 200 { "error": "NOT_PENDING" }
 
 Y al repetir `revokeInvitation` sobre la misma invitación ya revocada: `{"error":"ALREADY_REVOKED"}` (guarda
 preexistente, sigue funcionando). Datos de prueba (invitación de `manager@hotel.local`) restaurados a
-`status = 'pending'` al finalizar la prueba para no dejar el seed local alterado.
+`status = 'pending'` al finalizar la prueba para no dejar el seed local alterado. Evidencia completa
+(secuencia request/response de los 3 pasos, con nota metodológica sobre el fixture reutilizado):
+`evidencias/J3-PAT-1-2-3-4-6-regression-live.txt`.
 
 **Riesgo residual: Bajo.** La máquina de estados ahora es explícita y por lista permitida; cualquier estado
 nuevo que se agregue a futuro queda bloqueado por defecto en vez de permitido por defecto.
@@ -343,7 +354,11 @@ Mismo patrón en `PermissionDrawer.tsx` (interpolación de `admin.full_name` dir
 en el perfil de `admin@hotel.local` (vía SQL, revertido al finalizar la prueba) y se cargó `/admin/admins`
 como owner: el snapshot de accesibilidad de la página muestra el nombre de fila como el **texto literal**
 `<img src=x onerror=alert(1)>XSS-TEST` (no se creó ningún elemento `<img>` real en el DOM) y no se registró
-ninguna alerta ni error en la consola del navegador — confirmando que el payload no se ejecuta.
+ninguna alerta ni error en la consola del navegador — confirmando que el payload no se ejecuta. Se repitió la
+verificación abriendo también el `PermissionDrawer` de esa misma cuenta (segundo archivo de la ficha): mismo
+resultado, texto escapado (`&lt;img src=x onerror=alert(1)&gt;XSS-TEST`) y `0` elementos `img[onerror]` en
+el DOM. Evidencia completa (capturas de ambos componentes): `evidencias/J3-PAT-7-xss-neutralized-admins-table.png`,
+`evidencias/J3-PAT-7-xss-neutralized-permission-drawer.png`.
 
 **Riesgo residual: Bajo.** Al ser JSX plano, cualquier valor de `full_name` se escapa automáticamente; no
 depende de sanitización manual que pueda olvidarse en el futuro.
@@ -373,20 +388,32 @@ USING (auth.uid() = id OR (public.is_admin_or_owner() AND public.has_permission(
 -- DESPUÉS: exige admins:view (para listar) O permissions:manage (para gestionar).
 ```
 
-**Prueba de regresión (en vivo, antes/después con curl usando el JWT real de `admin@hotel.local`).**
+**Prueba de regresión (en vivo, antes/después con curl usando el JWT real de una cuenta admin base,
+`newadmin@hotel.local` — sin `admins:view` ni `permissions:manage`).**
 
 ```
 # Antes del parche (documentado en fase-2-pocs.md):
 GET /rest/v1/profiles?select=*          → 200, 11 filas (todos los perfiles)
 GET /rest/v1/user_permissions?select=*  → 200, 14 filas (permisos de todos los usuarios)
 
-# Después del parche, mismo JWT:
+# Después del parche, mismo tipo de cuenta:
 GET /rest/v1/profiles?select=*          → 200, 1 fila (solo su propio perfil)
 GET /rest/v1/user_permissions?select=*  → 200, 2 filas (solo sus propios permisos)
 ```
 
+Evidencia completa (request/response HTTP literal vía curl): `evidencias/J3-PAT-5-8-regression-live.txt`.
+
 **Riesgo residual: Bajo.** La RLS ahora replica a nivel de base de datos el mismo permiso de negocio que la
-UI ya exigía, cerrando el bypass directo vía PostgREST.
+UI ya exigía, cerrando el bypass directo vía PostgREST. Nota ampliada (detectada durante esta regresión): la
+política `select_permissions` deja pasar también a cualquier admin con `permissions:manage` — no solo
+`admins:view` — para que quien gestiona permisos pueda ver el padrón completo antes de otorgar/revocar; esto
+es el diseño previsto de la migración, pero implica que carecer de `admins:view` no es sinónimo de
+"solo ve sus propios permisos" en `user_permissions`: `admin@hotel.local`, que adquirió `permissions:manage` durante la
+regresión de J3-PAT-2/3, lee las 25 filas de `user_permissions` de todos los usuarios directamente por
+PostgREST (confirmado en vivo, ver `evidencias/J3-PAT-5-8-regression-live.txt`). Riesgo residual se mantiene
+en **Bajo** porque `permissions:manage` ya es en sí un permiso elevado otorgado explícitamente por el owner,
+pero queda documentado para que el equipo lo tenga presente si en el futuro se otorga `permissions:manage`
+con una expectativa de visibilidad más acotada.
 
 ---
 
@@ -442,6 +469,13 @@ con la invitación — queda como mejora menor fuera de alcance de esta fase. Da
 verificación (`pending_invitations`/`auth.users` eliminados; los 2 registros de `audit_logs` de arriba
 quedaron intencionalmente — la tabla es append-only por trigger, lo cual también confirma en vivo que ni
 siquiera el owner puede borrar evidencia de auditoría desde el editor SQL).
+
+Re-verificación adicional (2026-11-05/06, esta misma rama): se repitió la consulta contra
+`audit_logs` filtrando solo las últimas 2 horas — exactamente las filas generadas por las
+pruebas de regresión en vivo de J3-PAT-1/2/3/4/6 de esta sesión (sin dataset preparado) — y
+se confirmó que `updateUserPermissions`, `toggleAdminStatus`, `resendInvitation` y
+`revokeInvitation` siguen auditando correctamente con datos frescos. Evidencia completa:
+`evidencias/J3-PAT-9-audit-regression-live.txt`.
 
 **Riesgo residual: Bajo (con una salvedad documentada).** La escritura de auditoría es best-effort por
 diseño (no bloqueante), lo cual es la decisión correcta para no degradar la disponibilidad del panel, pero
@@ -556,7 +590,9 @@ GET /rest/v1/pending_invitations?or=(email.ilike.nopeemail.neq.%,email.ilike.%no
 Test de regresión (sin red):
 `pnpm --filter @hotel/panel-admin exec vitest run tests/invitations/searchInvitations.test.ts` → 3/3 ✓
 (incluye un caso que confirma el filtro final a exactamente 2 cláusulas, sin comillas ni paréntesis, y un
-caso que confirma que cada carácter fuera de la allowlist se elimina).
+caso que confirma que cada carácter fuera de la allowlist se elimina). Re-ejecutado en esta sesión contra
+el código actual de `develop`: mismo resultado (3/3 ✓). Evidencia completa:
+`evidencias/J3-PAT-10-11-regression-live.txt`.
 
 **Riesgo residual: Bajo.** La allowlist actúa sobre el único punto de entrada de `search`, así que ninguna
 coma, comilla o paréntesis llega al `.or()`; mismo patrón ya aceptado para AUD-POC-2/AUTH-POC-3/OP-POC-1.
@@ -600,7 +636,9 @@ try {
 (Playwright). Resultado: `POST /admin/invitations 200` en el log del servidor, **sin** ninguna línea
 `[invitations] creating admin account for ...` — contraste directo con la captura de J2-POC-11 (antes del
 parche), donde esa misma ruta sí imprimía el valor crudo (y, con un payload CRLF, una segunda línea
-forjada).
+forjada). Repetido en esta sesión con una invitación nueva (`j3pat11-stdout-check@hotel.local`), leyendo el
+stdout real del dev server antes/después del envío (texto literal, sin recortar): mismo resultado. Evidencia
+completa: `evidencias/J3-PAT-10-11-regression-live.txt`.
 
 **Riesgo residual: Bajo.** Al eliminar el sink por completo no depende de que nadie recuerde sanear un log
 de depuración que no debía existir; `logAuditEvent`, dos líneas más abajo en el mismo archivo, sigue siendo

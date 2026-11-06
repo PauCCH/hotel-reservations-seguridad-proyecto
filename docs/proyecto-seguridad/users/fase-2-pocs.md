@@ -6,7 +6,7 @@
 > `apps/panel-admin` corriendo en `http://localhost:3002`. Cuentas de prueba sembradas por
 > `packages/db/supabase/seed/seed.sql` (ver tabla de credenciales en el contexto de la sesión; no son
 > datos reales). Evidencias (capturas) en `docs/proyecto-seguridad/users/evidencias/` (primera ronda) y
-> `docs/proyecto-seguridad/users/evidencias_r2/` (segunda ronda, con el panel DevTools → Network visible en
+> `docs/proyecto-seguridad/users/evidencias/ronda-2-network/` (segunda ronda, con el panel DevTools → Network visible en
 > cada captura — ver "Anexo — Re-ejecución completa" al final de este documento), generadas con el MCP de
 > Playwright + capturas de escritorio reales (sin scripts headless).
 
@@ -641,7 +641,7 @@ solo en el cliente, para que cualquier chequeo basado en ese valor tenga sentido
 | **Subcategoría NIST CSF 2.0** | PR.DS-10 (protección de la integridad de los datos en uso) — hoy en estado **No cumple** *a propósito* en este módulo mientras dure la demostración (ver §4.2 de `fase-1-diagnostico.md`, donde originalmente estaba en **Cumple**); se remedia formalmente en Fase 3. También aplica **PR.PS-01** (gestión de configuración): no hay CSP como defensa en profundidad. |
 | **Origen del hallazgo** | **Introducida** — corresponde a la observación **O11** de `users/fase-1-diagnostico.md` §3, que ya identificó este módulo como "seguro por ahora, pero sin segunda capa de defensa", y que anticipó explícitamente la necesidad de una vulnerabilidad introducida para poder demostrar el patrón. Decisión de introducir la vulnerabilidad, y de dejarla viva hasta el parche de Fase 3, tomada explícitamente por el equipo (Seph), no unilateralmente por Claude. |
 | **Componente / archivo:línea** | `AdminsTable.tsx:50-58` y `PermissionDrawer.tsx:41-47` (ver diff abajo) — **vigente en el código al cierre de esta fase**, se remedia en Fase 3. |
-| **Commit donde se reprodujo** | Rama `security/users/fase2-pocs` — ver commit de este PR (Seph agrega el hash al mergear). |
+| **Commit donde se reprodujo** | `d82ceb0` (rama `security/users/fase2-pocs`) |
 
 ### Precondiciones
 - Mismo entorno de J2-POC-1 a J2-POC-7 (Supabase local, `panel-admin` en `:3002`).
@@ -860,7 +860,7 @@ el stack.
 | **Subcategoría NIST CSF 2.0** | PR.PS-04 (hardening de entrada), PR.DS-10 (integridad de los datos en uso) |
 | **Origen del hallazgo** | **Introducida** — corresponde a la observación de J2.1 (abajo), que ya anticipaba que haría falta introducir algo para demostrar A03. Mismo patrón que el real `getAuditLogs.ts:56-57` (AUD-POC-2) y los introducidos `AUTH-POC-3`/`OP-POC-1`. |
 | **Componente / archivo:línea** | `apps/panel-admin/src/features/invitations/services/searchInvitations.ts` (archivo nuevo, íntegro) |
-| **Commit donde se reprodujo** | Rama `security/users/fase2-pocs-faltantes` (Seph agrega el hash al commitear) |
+| **Commit donde se reprodujo** | `9eac585` (rama `security/users/fase2-pocs-faltantes`, PR #31) |
 
 ### Precondiciones
 - Sesión admin/owner con el permiso `admins:invite` — el mismo guard que ya protege
@@ -947,7 +947,7 @@ remediación ya documentado para AUD-POC-2/AUTH-POC-3.
 | **Subcategoría NIST CSF 2.0** | DE.CM-01, DE.AE-03, PR.PS-01 |
 | **Origen del hallazgo** | **Introducida.** `audit_logs` (la tabla real) ya está protegida por el saneamiento de Fabian (AUD-POC-6) — verificado en vivo, ver nota metodológica. El `console.log` introducido demuestra el mismo patrón sobre stdout, calcando el hallazgo real `AUTH-POC-6` de Autenticación. |
 | **Componente / archivo:línea** | `apps/panel-admin/src/features/invitations/services/createAdminAccountAction.ts` (línea agregada, justo antes del `try` que llama a `createAdminAccount`) |
-| **Commit donde se reprodujo** | Rama `security/users/fase2-pocs-faltantes` (Seph agrega el hash al commitear) |
+| **Commit donde se reprodujo** | `9eac585` (rama `security/users/fase2-pocs-faltantes`, PR #31) |
 
 ### Precondiciones
 - Sesión admin/owner con el permiso `admins:invite` (el formulario real de "Invitar" en
@@ -1115,7 +1115,7 @@ en este documento — queda señalado aquí para que Paula lo evalúe en el docu
 > (pasos reproducibles, análisis, causa raíz) **siguen vigentes sin cambios** — este anexo documenta
 > únicamente la evidencia y los valores (UUIDs, nombres de cuenta) de esta segunda ejecución.
 >
-> **Carpeta de evidencia:** `docs/proyecto-seguridad/users/evidencias_r2/` (separada de `evidencias/` para no
+> **Carpeta de evidencia:** `docs/proyecto-seguridad/users/evidencias/ronda-2-network/` (subcarpeta dentro de `evidencias/`, para no
 > mezclar ambas rondas). Convención de nombres: `J2-POC-<N>_<paso>_<descripción>.jpg`.
 
 ### Estado del entorno al momento de esta re-ejecución
@@ -1201,7 +1201,7 @@ navegador y terminal:
   completo y la evidencia.
 - **Punto extra de O5** (`signOut(adminId)` con UUID) → resultado negativo, no genera hallazgo nuevo. Ver
   la subsección "Verificación adicional" dentro de **J2-POC-5** (arriba).
-- Evidencia de ambos guardada también en `evidencias_r2/`, mismo convenio de nombres (ver sección 6 de
+- Evidencia de ambos guardada también en `evidencias/ronda-2-network/`, mismo convenio de nombres (ver sección 6 de
   `comprobacion.md` para los nombres de archivo exactos acordados con Seph).
 
 ### Estado final del entorno al cierre de esta ronda
@@ -1215,7 +1215,7 @@ navegador y terminal:
 - El código de `apps/panel-admin` **no cambió** en esta ronda — los dos archivos de J2-POC-8 ya estaban
   commiteados; esta ronda solo generó evidencia nueva y modificó datos (permisos, invitaciones) vía las
   propias Server Actions vulnerables, que es exactamente el comportamiento que cada PoC documenta.
-- **Siguiente paso para Seph:** revisar la carpeta `evidencias_r2/` (las 23 imágenes de la re-ejecución de
+- **Siguiente paso para Seph:** revisar la carpeta `evidencias/ronda-2-network/` (las 23 imágenes de la re-ejecución de
   las 8 PoCs + las nuevas de O7/O8 y del punto extra de O5), hacer `git add` de todo eso + este documento
   actualizado, y usar el mensaje de commit / PR de `comprobacion.md` (actualizado en la misma sesión) para
   el PR de Fase 2. El código fuente (`AdminsTable.tsx`, `PermissionDrawer.tsx`) ya estaba commiteado de una
