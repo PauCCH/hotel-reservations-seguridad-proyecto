@@ -1,0 +1,69 @@
+Re-prueba en vivo de J3-PAT-10 y J3-PAT-11 (adenda, modulo de Usuarios)
+============================================================================
+
+Fecha: 2026-11-05/06 (UTC). Rama security/users/fase3-evidencia-regresion sobre
+develop@2e2f2b9. Entorno: Supabase LOCAL (Docker), panel-admin en localhost:3002
+(dev server real corriendo en la maquina, pnpm --filter @hotel/panel-admin dev).
+
+
+1) J3-PAT-10 (J2-POC-10) - Allowlist (sanitizeInvitationsSearch) antes del .or() en searchInvitations
+-----------------------------------------------------------------------------------------------------
+
+Se repitio el test de regresion unitario (sin red) contra el codigo actual de develop:
+
+  $ pnpm --filter @hotel/panel-admin exec vitest run tests/invitations/searchInvitations.test.ts
+
+   RUN  v4.1.4 .../apps/panel-admin
+
+   OK tests/invitations/searchInvitations.test.ts (3 tests) 9ms
+
+   Test Files  1 passed (1)
+        Tests  3 passed (3)
+     Duration  589ms (transform 133ms, setup 0ms, import 302ms, tests 9ms, environment 0ms)
+
+Resultado: 3/3 OK, consistente con lo ya documentado en fase-3-parches.md (no hay regresion).
+
+
+2) J3-PAT-11 (J2-POC-11) - Eliminacion del console.log de depuracion en createAdminAccountAction
+--------------------------------------------------------------------------------------------------
+
+Con el dev server corriendo y sesion de owner@hotel.local, se envio una invitacion real nueva
+via el formulario "Invitar" (Playwright): full_name = "QA J3-PAT-11 Stdout Check",
+email = "j3pat11-stdout-check@hotel.local". Se leyo el stdout del proceso del dev server
+inmediatamente antes y despues del envio.
+
+Verificacion en BD de que la invitacion se creo (confirma que createAdminAccountAction
+efectivamente se ejecuto, no que fallo silenciosamente):
+
+  select id, email, status, created_at from public.pending_invitations
+  where email = 'j3pat11-stdout-check@hotel.local';
+
+   id                                   | email                             | status  | created_at
+   e4dd4803-3850-4014-a868-ace5ec93395b | j3pat11-stdout-check@hotel.local  | pending | 2026-11-06 00:44:49...
+
+Lineas nuevas en el stdout del dev server generadas por ese envio (texto literal, completo,
+sin recortar):
+
+  POST /admin/invitations 200 in 527ms
+  POST /admin/invitations 200 in 185ms
+
+Ninguna linea "[invitations] creating admin account for ..." aparece - el sink de stdout que
+exponia full_name/email en texto plano (J2-POC-11) ya no existe en el codigo actual.
+
+Nota adicional (mismo stdout, confirma tambien J3-PAT-1 y J3-PAT-4 desde el lado del servidor,
+no solo desde la respuesta HTTP ya documentada en evidencias/J3-PAT-1-2-3-4-6-regression-live.txt):
+el log del propio dev server para los intentos de bypass de admin@hotel.local muestra el stack
+trace completo y literal:
+
+  Error [PermissionDeniedError]: Permission denied: admins:view
+    at requirePermission (src\shared\auth\requirePermission.ts:48:11)
+    at async getUserPermissionsService (src\features\admins-table\services\permissions.ts:41:3)
+  POST /admin/admins 500 in 531ms
+
+  Error [PermissionDeniedError]: Permission denied: admins:disable
+    at requirePermission (src\shared\auth\requirePermission.ts:48:11)
+    at async toggleAdminStatus (src\features\admins-table\services\toggleAdminStatus.ts:27:3)
+  POST /admin/admins 500 in 257ms
+
+OK - Ambos hallazgos de la adenda (J3-PAT-10, J3-PAT-11) siguen mitigados en el codigo actual
+de develop; evidencia tomada en vivo contra el dev server real, no contra un entorno simulado.
