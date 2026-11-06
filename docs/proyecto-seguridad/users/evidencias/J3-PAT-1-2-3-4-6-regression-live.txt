@@ -1,0 +1,151 @@
+Re-prueba en vivo de J3-PAT-1, J3-PAT-2/3, J3-PAT-4 y J3-PAT-6 (Fase 3, modulo de Usuarios)
+============================================================================================
+
+Fecha: 2026-11-05. Rama security/users/fase3-evidencia-regresion sobre develop@2e2f2b9
+(incluye el hardening de J3-PAT-1-9 del commit 4d7c38c "fix(security): harden users module
+authz, XSS, RLS and get_admins() (Fase 3)").
+Entorno: Supabase LOCAL (Docker), panel-admin en localhost:3002 (`pnpm --filter
+@hotel/panel-admin dev`). Navegador: Chrome real vía Playwright MCP (no el sandbox de Claude).
+Las peticiones de bypass se hicieron con fetch() desde la consola del propio navegador, con la
+cookie de sesion real de cada cuenta, replicando el mismo Next-Action que usa la UI.
+
+UUIDs usados: owner@hotel.local = 5fb39480-1e93-453d-bae0-6973e38c4814;
+admin@hotel.local = 6d8af320-a040-4710-96fa-a178ea81133e;
+newadmin@hotel.local = a22af158-fc09-4535-a096-f3fe7b4b96db.
+
+
+1) J3-PAT-1 (J2-POC-2) - IDOR en getUserPermissionsService
+------------------------------------------------------------
+
+Cuenta: admin@hotel.local (rol admin; permisos confirmados por SQL: view:dashboard,
+reservations:view, permissions:manage - SIN admins:view).
+
+UI: /admin/admins muestra "403 Acceso Restringido" y el menu lateral ya no lista
+"Administradores" ni "Invitaciones" para esta cuenta (captura
+J3-PAT-1-403-admin-page-low-priv.png).
+
+Ataque directo (bypass de la UI), con la sesion de admin@hotel.local, mismo Next-Action
+documentado en el parche, apuntando al UUID del owner:
+
+  POST /admin/admins
+  Next-Action: 409b06a19cd4f0b05120ddc3101f7e31787f6154f3
+  Content-Type: text/plain;charset=UTF-8
+  body: ["5fb39480-1e93-453d-bae0-6973e38c4814"]
+
+Respuesta:
+  HTTP 500
+  1:E{"name":"PermissionDeniedError","message":"Permission denied: admins:view",
+      "stack":[["requirePermission",".../src/shared/auth/requirePermission.ts",46,...],
+               [" getUserPermissionsService",".../src/features/admins-table/services/permissions.ts",37,...]]}
+
+Antes del parche (Fase 2, J2-POC-2): el mismo payload devolvia HTTP 200 con el arreglo
+completo de permisos del owner.
+
+OK - El guard bloquea el IDOR; ningun dato del owner se entrega.
+
+
+2) J3-PAT-2 y J3-PAT-3 (J2-POC-3) - "Confused deputy" en updateUserPermissions
+---------------------------------------------------------------------------------
+
+Estado previo (confirmado por SQL, sin necesidad de alterarlo): admin@hotel.local ya tiene
+unicamente view:dashboard, reservations:view, permissions:manage (sin admins:revoke).
+Objetivo: newadmin@hotel.local, admin real y distinto del atacante (confirmado role = 'admin'
+en user_roles via SQL), con permisos view:dashboard, reservations:view (sin admins:revoke).
+
+Ataque (con la sesion de admin@hotel.local), mismo Next-Action documentado, pidiendo un
+permiso que el propio atacante no posee:
+
+  POST /admin/admins
+  Next-Action: 6090dad2b1d560459c7d974eaba42afb031ebd8aba
+  Content-Type: text/plain;charset=UTF-8
+  body: ["a22af158-fc09-4535-a096-f3fe7b4b96db",["permissions:manage","admins:revoke"]]
+
+Respuesta:
+  HTTP 200
+  1:{"error":"PERMISSION_EXCEEDED"}
+
+Verificacion en BD despues del intento (psql):
+  newadmin@hotel.local conserva exactamente {view:dashboard,reservations:view} - sin
+  admins:revoke, sin cambios.
+
+Antes del parche (Fase 2, J2-POC-3): el mismo payload devolvia HTTP 200 {"success":true},
+otorgando admins:revoke a newadmin@hotel.local sin que admin@hotel.local (el atacante) lo
+tuviera.
+
+OK - El chequeo de "permisos excedidos" (el llamador no puede otorgar lo que no tiene) bloquea
+la escalada de privilegios.
+
+
+3) J3-PAT-4 (J2-POC-5) - Estado dictado por el cliente en toggleAdminStatus
+------------------------------------------------------------------------------
+
+Cuenta: admin@hotel.local (misma sesion; sin admins:disable).
+
+Ataque: mismo Next-Action documentado, contra el UUID del owner:
+
+  POST /admin/admins
+  Next-Action: 7f89d617713f9e9176b60d316965d6c72fd6733eba
+  Content-Type: text/plain;charset=UTF-8
+  body: ["5fb39480-1e93-453d-bae0-6973e38c4814", true]
+
+Respuesta:
+  HTTP 500
+  1:E{"name":"PermissionDeniedError","message":"Permission denied: admins:disable",
+      "stack":[["requirePermission",".../src/shared/auth/requirePermission.ts",46,...],
+               [" toggleAdminStatus",".../src/features/admins-table/services/toggleAdminStatus.ts",28,...]]}
+
+Verificacion en BD despues del intento (psql): owner@hotel.local sigue con is_active = true,
+sin cambios.
+
+Antes del parche (Fase 2, J2-POC-5): el payload forjado (isActive=true -> el servidor invertia
+a false sin releer el estado real) desactivaba la cuenta del owner.
+
+OK - El guard de permiso bloquea el intento antes de llegar al chequeo OWNER_MODIFY (segunda
+capa de defensa).
+
+
+4) J3-PAT-6 (J2-POC-7) - Maquina de estados en revokeInvitation/resendInvitation
+------------------------------------------------------------------------------------
+
+Se creo una invitacion de prueba desechable (j3pat6-regresion@hotel.local, id
+41543772-8a2d-48cb-a3d0-2b2062abfad7) desde la sesion de owner@hotel.local para esta
+regresion. Nota metodologica: el fixture usado en la narrativa original de este parche
+(manager@hotel.local) ya tenia su cuenta sombra de auth eliminada por una revocacion real
+anterior a esta sesion; repetir el revoke sobre ella devuelve {"error":"UNKNOWN_ERROR"} porque
+auth.admin.deleteUser() falla sobre un usuario que ya no existe (ver revokeInvitation.ts) -
+esto es un artefacto de reutilizar un fixture ya revocado, no un defecto del parche. Por eso
+el paso 1 (revoke exitoso) se reproduce aqui con un fixture nuevo; los pasos 2 y 3 no llaman a
+deleteUser (retornan antes) y se confirmaron tambien sobre la invitacion ya revocada de
+manager@hotel.local con el mismo resultado.
+
+Paso 1 - revokeInvitation sobre la invitacion nueva (status = pending):
+
+  POST /admin/invitations
+  Next-Action: 7fde44704de7975394b3553611471a916837ae78ce
+  body: ["41543772-8a2d-48cb-a3d0-2b2062abfad7"]
+  Respuesta: HTTP 200  1:{"success":true}
+
+Paso 2 - resendInvitation sobre la misma invitacion, ya revocada:
+
+  POST /admin/invitations
+  Next-Action: 7f60626a92af2dc6f47e881189cffa433f1241b5a7
+  body: ["41543772-8a2d-48cb-a3d0-2b2062abfad7"]
+  Respuesta: HTTP 200  1:{"error":"NOT_PENDING"}
+
+Paso 3 - revokeInvitation de nuevo sobre la misma invitacion:
+
+  Respuesta: HTTP 200  1:{"error":"ALREADY_REVOKED"}
+
+Antes del parche (Fase 2, J2-POC-7): resendInvitation comparaba el estado contra el string
+"expired" (una comparacion rota: ese valor nunca se produce en la practica), por lo que la
+guarda nunca se activaba y el resend funcionaba sobre cualquier estado real, incluido
+"revoked" - reactivando una invitacion revocada.
+
+OK - La lista permitida (allowlist) cierra el vector: solo "pending" puede continuar; cualquier
+otro estado (incluido uno nuevo que se agregue a futuro) queda bloqueado por defecto.
+
+Datos de prueba: la invitacion j3pat6-regresion@hotel.local quedo revocada al finalizar (ese
+es el estado esperado tras la prueba); no se restauro porque es un fixture desechable creado
+unicamente para esta regresion, no parte del seed original. La invitacion de
+manager@hotel.local (fixture original, usada solo para confirmar los pasos 2 y 3) se dejo en
+estado "pending" tras la prueba, igual que lo documentado originalmente.

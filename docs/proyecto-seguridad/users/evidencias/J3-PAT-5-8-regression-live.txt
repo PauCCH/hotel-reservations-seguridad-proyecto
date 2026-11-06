@@ -1,0 +1,75 @@
+Re-prueba en vivo de J3-PAT-5 y J3-PAT-8 (Fase 3, modulo de Usuarios)
+=========================================================================
+
+Fecha: 2026-11-05. Rama security/users/fase3-evidencia-regresion sobre develop@2e2f2b9
+(incluye el hardening de J3-PAT-1-9 del commit 4d7c38c).
+Entorno: Supabase LOCAL (Docker), PostgREST en http://127.0.0.1:54321 (puerto nativo de la
+maquina real, no accesible desde la VM de Claude - las peticiones se hicieron con curl.exe
+via PowerShell en la maquina real). JWTs obtenidos con el flujo real de
+POST /auth/v1/token?grant_type=password (apikey = anon key local de Supabase).
+
+
+1) J3-PAT-5 (J2-POC-6) - get_admins() expuesto sin autenticacion
+--------------------------------------------------------------------
+
+Peticion (solo apikey anon, sin sesion, igual que la PoC original):
+
+  POST /rest/v1/rpc/get_admins
+  Headers: apikey: <anon key local>, Content-Type: application/json
+  Body: {}
+
+Respuesta:
+  HTTP/1.1 401 Unauthorized
+  Proxy-Status: PostgREST; error=42501
+  {"code":"42501","details":null,"hint":null,"message":"permission denied for function get_admins"}
+
+Antes del parche (Fase 2, J2-POC-6, documentado en fase-2-pocs.md): la misma peticion
+devolvia HTTP 200 con el roster completo (owner + admins).
+
+OK - El REVOKE EXECUTE sobre PUBLIC/anon cierra el acceso no autenticado al RPC.
+
+
+2) J3-PAT-8 (J2-POC-9) - RLS de profiles/user_permissions sin exigir el permiso real
+----------------------------------------------------------------------------------------
+
+Cuenta usada: newadmin@hotel.local (rol admin; permisos confirmados por SQL:
+view:dashboard, reservations:view - SIN admins:view, SIN permissions:manage). Se eligio
+esta cuenta y no admin@hotel.local porque esta ultima ya tiene permissions:manage desde la
+regresion de J3-PAT-2/3 (ver nota mas abajo); newadmin@hotel.local reproduce exactamente el
+perfil "admin base, sin permisos elevados" que la narrativa original de este parche describe.
+
+  GET /rest/v1/profiles?select=*
+  Headers: apikey: <anon key local>, Authorization: Bearer <JWT real de newadmin@hotel.local>
+  Respuesta: HTTP 200, Content-Range: 0-0/*
+  [{"id":"a22af158-fc09-4535-a096-f3fe7b4b96db","is_active":true,"full_name":"Nuevo Admin"}]
+  -> 1 fila (solo su propio perfil)
+
+  GET /rest/v1/user_permissions?select=*
+  Headers: apikey: <anon key local>, Authorization: Bearer <JWT real de newadmin@hotel.local>
+  Respuesta: HTTP 200, Content-Range: 0-1/*
+  [{"user_id":"a22af158-...","permission":"view:dashboard",...},
+   {"user_id":"a22af158-...","permission":"reservations:view",...}]
+  -> 2 filas (solo sus propios permisos)
+
+Antes del parche (Fase 2, J2-POC-9, documentado en fase-2-pocs.md): el mismo JWT devolvia
+200 con 11 filas en /profiles (todos los perfiles) y 14 filas en /user_permissions (los
+permisos de todos los usuarios).
+
+OK - Con una cuenta admin base (sin admins:view ni permissions:manage), la RLS restringe
+correctamente a las propias filas en ambas tablas.
+
+Nota de alcance (hallazgo durante esta regresion, no un hallazgo nuevo fuera de J3-PAT-8):
+se repitio la misma peticion GET /rest/v1/user_permissions?select=* con el JWT real de
+admin@hotel.local, que SI tiene permissions:manage (otorgado durante la regresion de
+J3-PAT-2/3, ver evidencias/J3-PAT-1-2-3-4-6-regression-live.txt). Resultado: HTTP 200 con
+25 filas (los permisos de TODOS los usuarios del sistema, no solo los propios). Esto es el
+comportamiento previsto por la propia migracion (comentario en
+20261102000001_users_fase3_permission_hardening.sql, politica select_permissions: "owner /
+admin con admins:view o permissions:manage pueden ver todos (admins:view para listar,
+permissions:manage para gestionar permisos)"), no un bypass del parche. Se deja constancia
+de que la frase "solo sus propios permisos" del enunciado original de este parche aplica
+unicamente a una cuenta admin SIN permissions:manage; cualquier admin con permissions:manage
+puede leer el listado completo de permisos de todos los usuarios directamente via PostgREST
+(no solo a traves de la UI), lo cual es consistente con que permissions:manage es, por
+diseno, un permiso elevado - pero vale la pena como nota de riesgo residual explicita en el
+documento de parches.
